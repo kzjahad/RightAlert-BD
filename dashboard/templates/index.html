@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RightAlert BD — Early Warning Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0a0e1a;
+      color: #e0e6f0;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: linear-gradient(135deg, #0d1b2a, #1b2a4a);
+      border-bottom: 2px solid #00d4ff44;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      font-size: 1.4rem;
+      color: #00d4ff;
+      letter-spacing: 1px;
+    }
+    header span {
+      font-size: 0.78rem;
+      color: #8899bb;
+    }
+    .live-badge {
+      background: #ff3b3b;
+      color: white;
+      font-size: 0.7rem;
+      font-weight: bold;
+      padding: 3px 10px;
+      border-radius: 20px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* ── LAYOUT ── */
+    .grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto 1fr auto;
+      gap: 16px;
+      padding: 16px;
+      height: calc(100vh - 60px);
+    }
+
+    /* ── STAT CARDS ── */
+    .stats-row {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .stat-card {
+      background: #111827;
+      border: 1px solid #1e3a5f;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #00d4ff;
+    }
+    .stat-card .label {
+      font-size: 0.75rem;
+      color: #8899bb;
+      margin-top: 4px;
+    }
+
+    /* ── LEFT PANEL ── */
+    .panel {
+      background: #111827;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel h2 {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #00d4ff;
+      border-bottom: 1px solid #1e3a5f;
+      padding-bottom: 8px;
+    }
+
+    /* ── FORM ── */
+    label {
+      font-size: 0.78rem;
+      color: #8899bb;
+      display: block;
+      margin-bottom: 4px;
+      margin-top: 10px;
+    }
+    select, input {
+      width: 100%;
+      background: #0a0e1a;
+      border: 1px solid #1e3a5f;
+      color: #e0e6f0;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #c0cce0;
+      font-size: 0.82rem;
+      margin: 0;
+      cursor: pointer;
+    }
+    .checkbox-group input[type="checkbox"] {
+      width: 16px;
+      accent-color: #00d4ff;
+    }
+
+    .btn-alert {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #ff4444, #cc2222);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 14px;
+      letter-spacing: 0.5px;
+      transition: transform 0.1s;
+    }
+    .btn-alert:hover { transform: scale(1.02); }
+    .btn-alert:active { transform: scale(0.98); }
+
+    /* ── MAP ── */
+    #map {
+      border-radius: 12px;
+      border: 1px solid #1e3a5f;
+      height: 100%;
+      min-height: 380px;
+    }
+
+    /* ── ALERT LOG ── */
+    .log-panel {
+      grid-column: 1 / -1;
+      background: #111827;
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 16px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .log-panel h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #00d4ff;
+      margin-bottom: 10px;
+    }
+    .log-entry {
+      font-size: 0.8rem;
+      padding: 6px 10px;
+      border-left: 3px solid #00d4ff;
+      margin-bottom: 6px;
+      background: #0d1523;
+      border-radius: 0 6px 6px 0;
+      animation: fadeIn 0.4s ease;
+    }
+    .log-entry.danger { border-left-color: #ff4444; }
+    .log-entry.confirm { border-left-color: #22cc88; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ── RISK BADGE ── */
+    .risk-high   { color: #ff4444; font-weight: bold; }
+    .risk-medium { color: #ffaa00; font-weight: bold; }
+    .risk-low    { color: #22cc88; font-weight: bold; }
+
+    /* ── CONFIRM SECTION ── */
+    .confirm-section { margin-top: 6px; }
+    .btn-confirm {
+      width: 100%;
+      padding: 9px;
+      background: #0d2e1a;
+      color: #22cc88;
+      border: 1px solid #22cc88;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.2s;
+    }
+    .btn-confirm:hover { background: #163d24; }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: #0a0e1a; }
+    ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 5px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🚨 RightAlert BD — Early Warning Command Center</h1>
+    <span>Multi-Hazard Last-Mile Alert System | Mapathon 2026</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="live-badge">● LIVE</span>
+    <span style="font-size:0.78rem;color:#8899bb;" id="clock"></span>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- STAT CARDS -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="value" id="stat-alerts">0</div>
+      <div class="label">Alerts Dispatched</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-confirms">0</div>
+      <div class="label">Confirmations Received</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-districts">4</div>
+      <div class="label">Districts Monitored</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-volunteers">46</div>
+      <div class="label">Volunteers On Network</div>
+    </div>
+  </div>
+
+  <!-- LEFT PANEL: Send Alert -->
+  <div class="panel">
+    <h2>⚡ Send Alert</h2>
+
+    <div>
+      <label>Hazard Type</label>
+      <select id="hazard">
+        <option value="cyclone">🌀 Cyclone</option>
+        <option value="flood">🌊 Flood</option>
+        <option value="landslide">⛰️ Landslide</option>
+      </select>
+
+      <label>Severity Level</label>
+      <select id="severity">
+        <!-- Options populated by JS based on hazard -->
+      </select>
+
+      <label>Affected Districts</label>
+      <div class="checkbox-group" id="district-checkboxes">
+        <!-- Populated by JS -->
+      </div>
+
+      <button class="btn-alert" onclick="sendAlert()">🚨 DISPATCH ALERT</button>
+    </div>
+
+    <div class="confirm-section">
+      <h2 style="margin-top:10px;">✅ Log Volunteer Confirmation</h2>
+      <label>District</label>
+      <select id="conf-district">
+        <option value="Cox's Bazar">Cox's Bazar</option>
+        <option value="Khulna">Khulna</option>
+        <option value="Sylhet">Sylhet</option>
+        <option value="Sunamganj">Sunamganj</option>
+      </select>
+      <label>Upazila</label>
+      <input type="text" id="conf-upazila" placeholder="e.g. Teknaf"/>
+      <label>Volunteer Name</label>
+      <input type="text" id="conf-name" placeholder="e.g. Volunteer Rahim"/>
+      <button class="btn-confirm" onclick="logConfirmation()">✅ Confirm Receipt</button>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- ALERT LOG -->
+  <div class="log-panel">
+    <h2>📋 System Log</h2>
+    <div id="log-entries">
+      <div class="log-entry">System initialized. Monitoring 4 districts. Awaiting alerts.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── CLOCK ──
+  function updateClock() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleString('en-BD', { timeZone: 'Asia/Dhaka' });
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── SEVERITY OPTIONS ──
+  const severityOptions = {
+    cyclone:   [["level_3","Signal 3 - Warning"],["level_4","Signal 4 - Danger"],
+                ["level_7","Signal 7 - Great Danger"],["level_10","Signal 10 - Maximum"]],
+    flood:     [["low","Low - Watch"],["medium","Medium - Warning"],["high","High - Emergency"]],
+    landslide: [["watch","Watch"],["warning","Warning"],["emergency","Emergency"]]
+  };
+
+  document.getElementById('hazard').addEventListener('change', updateSeverity);
+
+  function updateSeverity() {
+    const hazard = document.getElementById('hazard').value;
+    const sel = document.getElementById('severity');
+    sel.innerHTML = '';
+    severityOptions[hazard].forEach(([val, label]) => {
+      const opt = document.createElement('option');
+      opt.value = val; opt.textContent = label;
+      sel.appendChild(opt);
+    });
+  }
+  updateSeverity();
+
+  // ── DISTRICT CHECKBOXES ──
+  const districts = [
+    { name: "Cox's Bazar", risk: "high" },
+    { name: "Khulna",      risk: "high" },
+    { name: "Sylhet",      risk: "medium" },
+    { name: "Sunamganj",   risk: "high" }
+  ];
+
+  const cbGroup = document.getElementById('district-checkboxes');
+  districts.forEach(d => {
+    const lbl = document.createElement('label');
+    lbl.innerHTML = `
+      <input type="checkbox" value="${d.name}"/>
+      ${d.name} <span class="risk-${d.risk}">[${d.risk}]</span>
+    `;
+    cbGroup.appendChild(lbl);
+  });
+
+  // ── MAP ──
+  const map = L.map('map').setView([23.5, 90.3], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  const districtCoords = {
+    "Cox's Bazar": [21.4272, 92.0058],
+    "Khulna":      [22.8456, 89.5403],
+    "Sylhet":      [24.8949, 91.8687],
+    "Sunamganj":   [25.0658, 91.3950]
+  };
+
+  const riskColors = { high: '#ff4444', medium: '#ffaa00', low: '#22cc88' };
+  const markers = {};
+
+  districts.forEach(d => {
+    const coords = districtCoords[d.name];
+    if (!coords) return;
+    const marker = L.circleMarker(coords, {
+      radius: 16,
+      fillColor: riskColors[d.risk],
+      color: '#fff',
+      weight: 2,
+      opacity: 0.9,
+      fillOpacity: 0.5
+    }).addTo(map);
+    marker.bindPopup(`
+      <strong>${d.name}</strong><br/>
+      Risk: <span style="color:${riskColors[d.risk]}">${d.risk.toUpperCase()}</span>
+    `);
+    markers[d.name] = marker;
+  });
+
+  // ── LOG ──
+  function addLog(msg, type = '') {
+    const div = document.createElement('div');
+    div.className = `log-entry ${type}`;
+    div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    const container = document.getElementById('log-entries');
+    container.prepend(div);
+  }
+
+  // ── STATS ──
+  function refreshStats() {
+    fetch('/api/stats')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('stat-alerts').textContent    = data.total_alerts_sent;
+        document.getElementById('stat-confirms').textContent  = data.confirmations_received;
+        document.getElementById('stat-districts').textContent = data.districts_covered;
+        document.getElementById('stat-volunteers').textContent = data.total_volunteers;
+      });
+  }
+  setInterval(refreshStats, 3000);
+  refreshStats();
+
+  // ── SEND ALERT ──
+  function sendAlert() {
+    const hazard   = document.getElementById('hazard').value;
+    const severity = document.getElementById('severity').value;
+    const selected = [...document.querySelectorAll('#district-checkboxes input:checked')]
+                       .map(cb => cb.value);
+
+    if (selected.length === 0) {
+      alert('Please select at least one district.');
+      return;
+    }
+
+    // Flash markers
+    selected.forEach(d => {
+      const m = markers[d];
+      if (m) {
+        m.setStyle({ fillColor: '#ff0000', fillOpacity: 0.9 });
+        setTimeout(() => m.setStyle({ fillColor: riskColors['high'], fillOpacity: 0.5 }), 2000);
+      }
+    });
+
+    fetch('/api/send-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hazard, severity, districts: selected })
+    })
+    .then(r => r.json())
+    .then(data => {
+      addLog(`🚨 Alert ${data.alert_id} dispatched → ${selected.join(', ')} [${hazard.toUpperCase()} / ${severity}]`, 'danger');
+      refreshStats();
+    });
+  }
+
+  // ── CONFIRM RECEIPT ──
+  function logConfirmation() {
+    const district    = document.getElementById('conf-district').value;
+    const upazila     = document.getElementById('conf-upazila').value;
+    const confirmedBy = document.getElementById('conf-name').value;
+
+    if (!upazila || !confirmedBy) {
+      alert('Please fill in upazila and volunteer name.');
+      return;
+    }
+
+    fetch('/api/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ district, upazila, confirmed_by: confirmedBy })
+    })
+    .then(r => r.json())
+    .then(data => {
+      addLog(`✅ Confirmed: ${upazila}, ${district} — by ${confirmedBy}`, 'confirm');
+      document.getElementById('conf-upazila').value = '';
+      document.getElementById('conf-name').value    = '';
+      refreshStats();
+    });
+  }
+</script>
+</body>
+</html>
