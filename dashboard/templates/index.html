@@ -1,483 +1,1277 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RightAlert BD — Early Warning Dashboard</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RightAlert BD — Command Center v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700;900&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#04080f;--bg2:#080e1a;--bg3:#0c1525;
+  --border:#0e2240;--border2:#1a3a6a;
+  --accent:#00e5ff;--accent2:#ff3c3c;--accent3:#00ff9d;
+  --warn:#ffb300;--purple:#a855f7;--indigo:#6366f1;
+  --text:#c8d8f0;--text2:#5a7a9e;
+  --font-mono:'Share Tech Mono',monospace;
+  --font-main:'Barlow',sans-serif;
+  --font-cond:'Barlow Condensed',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-main);display:flex;flex-direction:column;}
+body::after{content:'';pointer-events:none;position:fixed;inset:0;z-index:9998;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.022) 2px,rgba(0,0,0,0.022) 4px);}
 
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #0a0e1a;
-      color: #e0e6f0;
-      min-height: 100vh;
-    }
+/* ── HEADER ── */
+header{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  padding:8px 20px;background:var(--bg2);border-bottom:1px solid var(--border);
+  flex-shrink:0;position:relative;overflow:hidden;}
+header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  animation:scanH 4s linear infinite;}
+@keyframes scanH{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.hdr-logo{font-family:var(--font-cond);font-size:1.4rem;font-weight:900;color:var(--accent);letter-spacing:2px;}
+.hdr-sub{font-size:0.6rem;color:var(--text2);letter-spacing:1px;}
+.hdr-title{text-align:center;font-family:var(--font-cond);font-size:1rem;font-weight:700;color:var(--text);letter-spacing:3px;}
+.hdr-mapathon{text-align:center;font-size:0.58rem;color:var(--text2);letter-spacing:2px;}
+.hdr-right{display:flex;align-items:center;justify-content:flex-end;gap:12px;}
+.status-pill{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:0.65rem;
+  color:var(--accent3);border:1px solid var(--accent3);padding:3px 9px;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent3);animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+#clock{font-family:var(--font-mono);font-size:0.72rem;color:var(--warn);}
 
-    /* ── HEADER ── */
-    header {
-      background: linear-gradient(135deg, #0d1b2a, #1b2a4a);
-      border-bottom: 2px solid #00d4ff44;
-      padding: 14px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    header h1 {
-      font-size: 1.4rem;
-      color: #00d4ff;
-      letter-spacing: 1px;
-    }
-    header span {
-      font-size: 0.78rem;
-      color: #8899bb;
-    }
-    .live-badge {
-      background: #ff3b3b;
-      color: white;
-      font-size: 0.7rem;
-      font-weight: bold;
-      padding: 3px 10px;
-      border-radius: 20px;
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
+/* ── TAB NAV ── */
+.tab-nav{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.tab-btn{padding:8px 20px;font-family:var(--font-cond);font-size:0.72rem;font-weight:700;
+  letter-spacing:1.5px;color:var(--text2);background:transparent;border:none;
+  border-bottom:2px solid transparent;cursor:pointer;transition:all 0.2s;text-transform:uppercase;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-pane{display:none;flex:1;overflow:hidden;}
+.tab-pane.active{display:flex;}
 
-    /* ── LAYOUT ── */
-    .grid {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      grid-template-rows: auto 1fr auto;
-      gap: 16px;
-      padding: 16px;
-      height: calc(100vh - 60px);
-    }
+/* ── MAIN LAYOUT ── */
+.workspace{display:grid;grid-template-columns:270px 1fr 290px;flex:1;overflow:hidden;}
 
-    /* ── STAT CARDS ── */
-    .stats-row {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-    }
-    .stat-card {
-      background: #111827;
-      border: 1px solid #1e3a5f;
-      border-radius: 10px;
-      padding: 16px;
-      text-align: center;
-    }
-    .stat-card .value {
-      font-size: 2rem;
-      font-weight: bold;
-      color: #00d4ff;
-    }
-    .stat-card .label {
-      font-size: 0.75rem;
-      color: #8899bb;
-      margin-top: 4px;
-    }
+/* ── PANEL ── */
+.panel{border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.panel:last-child{border-right:none;border-left:1px solid var(--border);}
+.ptitle{font-family:var(--font-cond);font-size:0.7rem;font-weight:700;letter-spacing:2px;
+  color:var(--accent);text-transform:uppercase;padding:8px 14px;
+  border-bottom:1px solid var(--border);background:var(--bg2);
+  flex-shrink:0;display:flex;align-items:center;gap:7px;}
+.ptitle::before{content:'';width:3px;height:12px;background:currentColor;display:block;}
+.ptitle.red{color:var(--accent2);}
+.ptitle.green{color:var(--accent3);}
+.ptitle.purple{color:var(--purple);}
+.ptitle.warn{color:var(--warn);}
+.ptitle.indigo{color:var(--indigo);}
+.pbody{padding:12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px;}
+.pbody::-webkit-scrollbar{width:3px;}
+.pbody::-webkit-scrollbar-thumb{background:var(--border2);}
 
-    /* ── LEFT PANEL ── */
-    .panel {
-      background: #111827;
-      border: 1px solid #1e3a5f;
-      border-radius: 12px;
-      padding: 18px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .panel h2 {
-      font-size: 0.9rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #00d4ff;
-      border-bottom: 1px solid #1e3a5f;
-      padding-bottom: 8px;
-    }
+/* ── FORM ── */
+.flabel{font-size:0.62rem;letter-spacing:1.5px;color:var(--text2);text-transform:uppercase;
+  margin-bottom:4px;font-family:var(--font-mono);}
+select,input[type=text]{width:100%;background:var(--bg);border:1px solid var(--border);
+  color:var(--text);padding:7px 9px;font-family:var(--font-mono);font-size:0.75rem;
+  appearance:none;transition:border-color 0.2s;}
+select:focus,input[type=text]:focus{outline:none;border-color:var(--accent);}
+select option{background:var(--bg2);}
 
-    /* ── FORM ── */
-    label {
-      font-size: 0.78rem;
-      color: #8899bb;
-      display: block;
-      margin-bottom: 4px;
-      margin-top: 10px;
-    }
-    select, input {
-      width: 100%;
-      background: #0a0e1a;
-      border: 1px solid #1e3a5f;
-      color: #e0e6f0;
-      padding: 8px 10px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-    }
-    .checkbox-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 6px;
-    }
-    .checkbox-group label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #c0cce0;
-      font-size: 0.82rem;
-      margin: 0;
-      cursor: pointer;
-    }
-    .checkbox-group input[type="checkbox"] {
-      width: 16px;
-      accent-color: #00d4ff;
-    }
+/* ── DISTRICT CHECKS ── */
+.d-check{display:flex;align-items:center;gap:7px;cursor:pointer;
+  padding:6px 9px;border:1px solid var(--border);transition:all 0.2s;user-select:none;}
+.d-check:hover,.d-check.active{border-color:var(--accent);background:rgba(0,229,255,0.04);}
+.d-box{width:13px;height:13px;border:1px solid var(--text2);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.d-check.active .d-box{background:var(--accent);border-color:var(--accent);}
+.d-check.active .d-box::after{content:'✓';font-size:9px;color:var(--bg);}
+.d-name{font-family:var(--font-mono);font-size:0.72rem;flex:1;}
+.risk-badge{font-size:0.58rem;padding:1px 5px;font-family:var(--font-cond);font-weight:700;}
+.rb-high{color:var(--accent2);border:1px solid var(--accent2);}
+.rb-medium{color:var(--warn);border:1px solid var(--warn);}
 
-    .btn-alert {
-      width: 100%;
-      padding: 12px;
-      background: linear-gradient(135deg, #ff4444, #cc2222);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 14px;
-      letter-spacing: 0.5px;
-      transition: transform 0.1s;
-    }
-    .btn-alert:hover { transform: scale(1.02); }
-    .btn-alert:active { transform: scale(0.98); }
+/* ── BUTTONS ── */
+.btn-dispatch{width:100%;padding:11px;background:transparent;border:1px solid var(--accent2);
+  color:var(--accent2);font-family:var(--font-cond);font-size:0.95rem;font-weight:700;
+  letter-spacing:3px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;}
+.btn-dispatch::before{content:'';position:absolute;inset:0;background:var(--accent2);
+  transform:scaleX(0);transform-origin:left;transition:transform 0.2s;z-index:0;}
+.btn-dispatch:hover::before{transform:scaleX(1);}
+.btn-dispatch:hover{color:white;}
+.btn-dispatch span{position:relative;z-index:1;}
+.btn-ai{width:100%;padding:9px;background:transparent;border:1px solid var(--purple);
+  color:var(--purple);font-family:var(--font-cond);font-size:0.85rem;font-weight:700;
+  letter-spacing:2px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:7px;}
+.btn-ai:hover{background:rgba(168,85,247,0.1);}
+.btn-ai:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-sm{width:100%;padding:8px;background:transparent;border:1px solid var(--accent3);
+  color:var(--accent3);font-family:var(--font-cond);font-size:0.8rem;font-weight:700;
+  letter-spacing:2px;cursor:pointer;transition:all 0.2s;}
+.btn-sm:hover{background:rgba(0,255,157,0.08);}
+.btn-secondary{width:100%;padding:8px;background:transparent;border:1px solid var(--border2);
+  color:var(--text2);font-family:var(--font-cond);font-size:0.78rem;font-weight:700;
+  letter-spacing:1px;cursor:pointer;transition:all 0.2s;}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent);}
 
-    /* ── MAP ── */
-    #map {
-      border-radius: 12px;
-      border: 1px solid #1e3a5f;
-      height: 100%;
-      min-height: 380px;
-    }
+/* ── STATS ── */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;flex-shrink:0;}
+.stat{padding:7px 8px;background:var(--bg);border:1px solid var(--border);text-align:center;}
+.stat-val{font-family:var(--font-cond);font-size:1.4rem;font-weight:900;color:var(--accent);line-height:1;}
+.stat-lbl{font-size:0.55rem;color:var(--text2);letter-spacing:1px;margin-top:1px;font-family:var(--font-mono);}
 
-    /* ── ALERT LOG ── */
-    .log-panel {
-      grid-column: 1 / -1;
-      background: #111827;
-      border: 1px solid #1e3a5f;
-      border-radius: 12px;
-      padding: 16px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    .log-panel h2 {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #00d4ff;
-      margin-bottom: 10px;
-    }
-    .log-entry {
-      font-size: 0.8rem;
-      padding: 6px 10px;
-      border-left: 3px solid #00d4ff;
-      margin-bottom: 6px;
-      background: #0d1523;
-      border-radius: 0 6px 6px 0;
-      animation: fadeIn 0.4s ease;
-    }
-    .log-entry.danger { border-left-color: #ff4444; }
-    .log-entry.confirm { border-left-color: #22cc88; }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateX(-10px); }
-      to   { opacity: 1; transform: translateX(0); }
-    }
+/* ── AI BOX ── */
+.ai-box{background:var(--bg);border:1px solid var(--purple);padding:10px;border-left:3px solid var(--purple);min-height:55px;}
+.ai-label{font-size:0.58rem;color:var(--purple);letter-spacing:1px;margin-bottom:4px;font-family:var(--font-mono);}
+.ai-text{font-size:0.82rem;color:var(--text);line-height:1.5;white-space:pre-wrap;}
+.ai-spinner{display:none;align-items:center;gap:8px;font-family:var(--font-mono);font-size:0.7rem;color:var(--purple);}
+.ai-spinner.show{display:flex;}
+.sdots span{animation:dot 1.2s infinite;display:inline-block;}
+.sdots span:nth-child(2){animation-delay:0.2s;}
+.sdots span:nth-child(3){animation-delay:0.4s;}
+@keyframes dot{0%,80%,100%{opacity:0}40%{opacity:1}}
 
-    /* ── RISK BADGE ── */
-    .risk-high   { color: #ff4444; font-weight: bold; }
-    .risk-medium { color: #ffaa00; font-weight: bold; }
-    .risk-low    { color: #22cc88; font-weight: bold; }
+/* ── CHANNELS ── */
+.channel-item{display:flex;align-items:center;gap:8px;padding:7px 9px;
+  border:1px solid var(--border);transition:all 0.3s;}
+.channel-item.firing{border-color:var(--accent);animation:chFire 0.6s ease;}
+.channel-item.done{border-color:var(--accent3);}
+@keyframes chFire{0%{background:rgba(0,229,255,0.2)}100%{background:transparent}}
+.ch-icon{font-size:1rem;width:22px;text-align:center;}
+.ch-info{flex:1;}
+.ch-name{font-family:var(--font-cond);font-size:0.75rem;font-weight:700;letter-spacing:1px;}
+.ch-desc{font-size:0.6rem;color:var(--text2);font-family:var(--font-mono);}
+.ch-s{font-family:var(--font-mono);font-size:0.6rem;padding:2px 6px;}
+.ch-s.idle{color:var(--text2);border:1px solid var(--border);}
+.ch-s.active{color:var(--accent);border:1px solid var(--accent);animation:blink 1s infinite;}
+.ch-s.sent{color:var(--accent3);border:1px solid var(--accent3);}
 
-    /* ── CONFIRM SECTION ── */
-    .confirm-section { margin-top: 6px; }
-    .btn-confirm {
-      width: 100%;
-      padding: 9px;
-      background: #0d2e1a;
-      color: #22cc88;
-      border: 1px solid #22cc88;
-      border-radius: 6px;
-      font-size: 0.82rem;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: background 0.2s;
-    }
-    .btn-confirm:hover { background: #163d24; }
+/* ── LEGAL ── */
+.legal-item{display:flex;align-items:flex-start;gap:8px;padding:6px 9px;
+  border:1px solid var(--border);transition:all 0.3s;}
+.legal-item.triggered{border-color:var(--accent3);background:rgba(0,255,157,0.03);}
+.legal-item.breached{border-color:var(--accent2);animation:breachPulse 2s infinite;}
+.legal-item.pending{border-color:var(--warn);}
+@keyframes breachPulse{0%,100%{border-color:var(--accent2)}50%{border-color:transparent}}
+.legal-icon{font-size:0.85rem;flex-shrink:0;margin-top:1px;}
+.legal-body{flex:1;}
+.legal-law{font-family:var(--font-cond);font-size:0.72rem;font-weight:700;color:var(--text);}
+.legal-desc{font-size:0.6rem;color:var(--text2);font-family:var(--font-mono);margin-top:1px;line-height:1.3;}
+.legal-badge{font-size:0.58rem;padding:2px 6px;font-family:var(--font-cond);font-weight:700;flex-shrink:0;margin-top:1px;}
+.lb-met{color:var(--accent3);border:1px solid var(--accent3);}
+.lb-breach{color:var(--accent2);border:1px solid var(--accent2);}
+.lb-pending{color:var(--warn);border:1px solid var(--warn);}
+.lb-idle{color:var(--text2);border:1px solid var(--border);}
 
-    /* scrollbar */
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: #0a0e1a; }
-    ::-webkit-scrollbar-thumb { background: #1e3a5f; border-radius: 5px; }
-  </style>
+/* ── ESCALATION ── */
+.esc-item{background:var(--bg);border:1px solid var(--border);padding:8px 10px;}
+.esc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.esc-id{font-family:var(--font-mono);font-size:0.65rem;color:var(--text2);}
+.esc-district{font-family:var(--font-cond);font-size:0.78rem;font-weight:700;color:var(--text);}
+.esc-progress{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:4px;}
+.esc-bar{height:100%;background:var(--accent3);transition:width 1s linear,background 0.5s;}
+.esc-bar.warn{background:var(--warn);}
+.esc-bar.danger{background:var(--accent2);}
+.esc-footer{display:flex;justify-content:space-between;align-items:center;}
+.esc-time{font-family:var(--font-mono);font-size:0.7rem;}
+.esc-time.ok{color:var(--accent3);}
+.esc-time.warn{color:var(--warn);}
+.esc-time.danger{color:var(--accent2);animation:blink 0.5s infinite;}
+.esc-status-badge{font-size:0.6rem;font-family:var(--font-mono);padding:1px 6px;}
+.esc-status-badge.waiting{color:var(--text2);border:1px solid var(--border);}
+.esc-status-badge.escalated{color:var(--accent2);border:1px solid var(--accent2);}
+.esc-status-badge.confirmed{color:var(--accent3);border:1px solid var(--accent3);}
+.esc-empty{font-family:var(--font-mono);font-size:0.7rem;color:var(--text2);padding:10px;
+  text-align:center;border:1px dashed var(--border);}
+
+/* ── POPULATION ── */
+.pop-total{display:flex;align-items:baseline;gap:8px;padding:6px 0;}
+.pop-num{font-family:var(--font-cond);font-size:2rem;font-weight:900;color:var(--warn);line-height:1;}
+.pop-lbl{font-size:0.62rem;color:var(--text2);font-family:var(--font-mono);}
+.pop-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.pop-card{background:var(--bg);border:1px solid var(--border);padding:7px;text-align:center;}
+.pop-card-val{font-family:var(--font-cond);font-size:1.1rem;font-weight:900;line-height:1;}
+.pop-card-lbl{font-size:0.58rem;color:var(--text2);font-family:var(--font-mono);margin-top:2px;}
+.pop-bar-label{display:flex;justify-content:space-between;font-size:0.58rem;font-family:var(--font-mono);color:var(--text2);margin-bottom:2px;}
+.pop-bar-track{height:4px;background:var(--border);border-radius:2px;}
+.pop-bar-fill{height:100%;border-radius:2px;transition:width 0.8s ease;}
+.pop-empty{font-family:var(--font-mono);font-size:0.7rem;color:var(--text2);padding:14px;text-align:center;border:1px dashed var(--border);}
+
+/* ── VOL ── */
+.vol-item{display:flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid var(--border);font-family:var(--font-mono);font-size:0.67rem;}
+.vdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--text2);}
+.vdot.confirmed{background:var(--accent3);box-shadow:0 0 5px var(--accent3);}
+.vdot.alerted{background:var(--accent2);box-shadow:0 0 5px var(--accent2);animation:blink 1s infinite;}
+
+/* ── LOG ── */
+.log-item{font-family:var(--font-mono);font-size:0.65rem;padding:4px 7px;border-left:2px solid var(--border);line-height:1.3;animation:logIn 0.3s ease;}
+@keyframes logIn{from{opacity:0;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+.log-item.alert{border-color:var(--accent2);color:var(--accent2);}
+.log-item.confirm{border-color:var(--accent3);color:var(--accent3);}
+.log-item.info{border-color:var(--border);color:var(--text2);}
+.log-item.ai{border-color:var(--purple);color:var(--purple);}
+.log-time{color:var(--text2);margin-right:5px;}
+
+/* ── ALERT BANNER ── */
+.alert-banner{display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  z-index:1000;background:var(--accent2);color:white;font-family:var(--font-cond);
+  font-size:0.95rem;font-weight:700;letter-spacing:3px;padding:9px 28px;}
+.alert-banner.show{display:block;animation:bannerIn 0.3s ease;}
+@keyframes bannerIn{from{opacity:0;transform:translate(-50%,-15px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* ── ESCALATION NOTIF ── */
+.esc-notif{display:none;position:fixed;bottom:20px;right:20px;z-index:9997;
+  background:#1a0808;border:2px solid var(--accent2);padding:14px 18px;max-width:280px;}
+.esc-notif.show{display:block;animation:logIn 0.4s ease;}
+.esc-notif-title{font-family:var(--font-cond);font-size:0.9rem;font-weight:700;color:var(--accent2);margin-bottom:4px;}
+.esc-notif-body{font-family:var(--font-mono);font-size:0.67rem;color:var(--text);}
+
+/* ── WEATHER CARDS ── */
+.weather-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.wx-card{background:var(--bg);border:1px solid var(--border);padding:9px;
+  transition:border-color 0.3s;cursor:pointer;}
+.wx-card:hover{border-color:var(--accent);}
+.wx-card.active{border-color:var(--warn);background:rgba(255,179,0,0.04);}
+.wx-district{font-family:var(--font-cond);font-size:0.75rem;font-weight:700;color:var(--text);margin-bottom:4px;}
+.wx-icon{font-size:1.4rem;margin-bottom:4px;}
+.wx-temp{font-family:var(--font-cond);font-size:1rem;font-weight:700;color:var(--warn);}
+.wx-desc{font-size:0.6rem;color:var(--text2);font-family:var(--font-mono);margin-top:2px;}
+.wx-wind{font-size:0.62rem;color:var(--accent);font-family:var(--font-mono);}
+.wx-detail{display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.wx-card.active .wx-detail{display:block;}
+.wx-row{display:flex;justify-content:space-between;font-size:0.62rem;font-family:var(--font-mono);
+  color:var(--text2);padding:2px 0;}
+.wx-row span:last-child{color:var(--text);}
+.wx-alert-flag{display:inline-block;font-size:0.58rem;padding:2px 6px;margin-top:4px;
+  font-family:var(--font-cond);font-weight:700;}
+.wx-flag-high{color:var(--accent2);border:1px solid var(--accent2);}
+.wx-flag-med{color:var(--warn);border:1px solid var(--warn);}
+.wx-flag-low{color:var(--accent3);border:1px solid var(--accent3);}
+.wx-update{font-size:0.58rem;color:var(--text2);font-family:var(--font-mono);text-align:right;margin-top:6px;}
+.wx-ticker{background:var(--bg);border:1px solid var(--border);padding:6px 10px;
+  font-family:var(--font-mono);font-size:0.65rem;color:var(--warn);overflow:hidden;white-space:nowrap;}
+.wx-ticker-inner{display:inline-block;animation:ticker 18s linear infinite;}
+@keyframes ticker{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
+
+/* ── SMS SIMULATOR ── */
+.phone-wrap{display:flex;justify-content:center;padding:10px 0;}
+.phone{
+  width:200px;background:#111;border-radius:28px;padding:10px;
+  border:3px solid #333;box-shadow:0 0 30px rgba(0,229,255,0.1);
+  position:relative;
+}
+.phone-notch{width:70px;height:12px;background:#222;border-radius:6px;margin:0 auto 10px;}
+.phone-screen{background:#1a1a2e;border-radius:18px;padding:10px;min-height:280px;}
+.phone-status{display:flex;justify-content:space-between;font-size:0.55rem;
+  color:#888;margin-bottom:8px;font-family:var(--font-mono);}
+.sms-header{background:#0a3d62;border-radius:8px 8px 0 0;padding:7px 10px;
+  display:flex;align-items:center;gap:6px;margin-bottom:2px;}
+.sms-avatar{width:28px;height:28px;border-radius:50%;background:#1e5799;
+  display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:bold;color:white;}
+.sms-sender{font-size:0.68rem;color:#aaa;font-family:var(--font-mono);}
+.sms-sender b{color:white;display:block;font-size:0.72rem;}
+.sms-bubble-wrap{padding:4px 6px;}
+.sms-bubble{background:#1e3a5f;border-radius:0 12px 12px 12px;padding:10px;
+  font-size:0.78rem;color:white;line-height:1.5;word-break:break-word;}
+.sms-bubble.typing{opacity:0.5;}
+.sms-time{font-size:0.55rem;color:#666;text-align:right;margin-top:4px;font-family:var(--font-mono);}
+.sms-read{font-size:0.55rem;color:#00e5ff;text-align:right;font-family:var(--font-mono);}
+.sms-action-bar{background:#0d1b2a;border-radius:0 0 18px 18px;padding:8px;
+  display:flex;gap:5px;margin-top:2px;}
+.sms-action{flex:1;text-align:center;padding:5px;background:#1a3a5f;border-radius:6px;
+  font-size:0.6rem;color:#aaa;font-family:var(--font-mono);}
+.phone-home{width:40px;height:4px;background:#333;border-radius:2px;margin:8px auto 0;}
+.sms-controls{display:flex;flex-direction:column;gap:8px;}
+.sms-preview-label{font-size:0.6rem;color:var(--text2);font-family:var(--font-mono);margin-bottom:4px;}
+
+/* ── UPAZILA DRILLDOWN ── */
+.upazila-wrap{display:flex;flex-direction:column;gap:8px;}
+.upa-back{display:flex;align-items:center;gap:8px;cursor:pointer;
+  padding:6px 10px;border:1px solid var(--border);font-family:var(--font-mono);
+  font-size:0.7rem;color:var(--text2);transition:all 0.2s;}
+.upa-back:hover{border-color:var(--accent);color:var(--accent);}
+.upa-district-title{font-family:var(--font-cond);font-size:1rem;font-weight:700;
+  color:var(--text);padding:6px 0;border-bottom:1px solid var(--border);margin-bottom:4px;}
+.upa-grid{display:flex;flex-direction:column;gap:5px;}
+.upa-card{background:var(--bg);border:1px solid var(--border);padding:9px 11px;transition:all 0.2s;}
+.upa-card:hover{border-color:var(--accent);background:rgba(0,229,255,0.03);}
+.upa-name{font-family:var(--font-cond);font-size:0.85rem;font-weight:700;color:var(--text);}
+.upa-stats{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;}
+.upa-stat{font-size:0.6rem;font-family:var(--font-mono);color:var(--text2);}
+.upa-stat span{color:var(--accent);}
+.upa-risk-bar{height:3px;margin-top:6px;border-radius:2px;}
+.district-selector{display:flex;flex-direction:column;gap:5px;}
+.dist-select-card{background:var(--bg);border:1px solid var(--border);padding:10px 12px;
+  cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:space-between;}
+.dist-select-card:hover{border-color:var(--accent);background:rgba(0,229,255,0.03);}
+.dist-select-name{font-family:var(--font-cond);font-size:0.9rem;font-weight:700;color:var(--text);}
+.dist-select-meta{font-size:0.62rem;color:var(--text2);font-family:var(--font-mono);margin-top:2px;}
+.dist-select-arrow{color:var(--text2);font-size:0.8rem;}
+
+/* ── TIMELINE ── */
+.timeline-wrap{display:flex;flex-direction:column;gap:10px;flex:1;}
+.timeline-chart-wrap{flex:1;min-height:0;position:relative;}
+.timeline-legend{display:flex;gap:12px;flex-wrap:wrap;padding:8px 12px;
+  border-top:1px solid var(--border);flex-shrink:0;}
+.tl-legend-item{display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:0.62rem;color:var(--text2);}
+.tl-dot{width:8px;height:8px;border-radius:50%;}
+
+/* ── SEPARATOR ── */
+.sep{height:1px;background:var(--border);flex-shrink:0;margin:0;}
+
+/* ── CENTER STACK ── */
+.center-col{display:flex;flex-direction:column;overflow:hidden;}
+#map{flex:1;min-height:0;position:relative;}
+.bottom-strip{height:185px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;flex-shrink:0;}
+.bs-panel{display:flex;flex-direction:column;overflow:hidden;}
+.bs-panel:first-child{border-right:1px solid var(--border);}
+</style>
 </head>
 <body>
 
+<!-- HEADER -->
 <header>
-  <div>
-    <h1>🚨 RightAlert BD — Early Warning Command Center</h1>
-    <span>Multi-Hazard Last-Mile Alert System | Mapathon 2026</span>
-  </div>
-  <div style="display:flex;align-items:center;gap:12px;">
-    <span class="live-badge">● LIVE</span>
-    <span style="font-size:0.78rem;color:#8899bb;" id="clock"></span>
+  <div><div class="hdr-logo">🚨 RIGHTALERT BD</div><div class="hdr-sub">Multi-Hazard Last-Mile Warning System v3.0</div></div>
+  <div><div class="hdr-title">EMERGENCY OPERATIONS CENTER</div><div class="hdr-mapathon">Mapathon 2026 · RIMES & Save the Children · GFFO</div></div>
+  <div class="hdr-right">
+    <div class="status-pill"><div class="dot"></div>SYSTEM ONLINE</div>
+    <div id="clock">--:--:--</div>
   </div>
 </header>
 
-<div class="grid">
+<!-- TAB NAV -->
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('main',this)">🗺 Command Center</button>
+  <button class="tab-btn" onclick="switchTab('weather',this)">🌦 Weather Feed</button>
+  <button class="tab-btn" onclick="switchTab('sms',this)">📱 SMS Simulator</button>
+  <button class="tab-btn" onclick="switchTab('upazila',this)">🗺 Upazila Drill-Down</button>
+  <button class="tab-btn" onclick="switchTab('timeline',this)">📈 Alert Timeline</button>
+</div>
 
-  <!-- STAT CARDS -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="value" id="stat-alerts">0</div>
-      <div class="label">Alerts Dispatched</div>
-    </div>
-    <div class="stat-card">
-      <div class="value" id="stat-confirms">0</div>
-      <div class="label">Confirmations Received</div>
-    </div>
-    <div class="stat-card">
-      <div class="value" id="stat-districts">4</div>
-      <div class="label">Districts Monitored</div>
-    </div>
-    <div class="stat-card">
-      <div class="value" id="stat-volunteers">46</div>
-      <div class="label">Volunteers On Network</div>
-    </div>
-  </div>
+<!-- ══════════════════════════════════
+     TAB 1: COMMAND CENTER
+══════════════════════════════════ -->
+<div class="tab-pane active" id="tab-main" style="flex:1;overflow:hidden;">
+<div class="workspace">
 
-  <!-- LEFT PANEL: Send Alert -->
+  <!-- LEFT -->
   <div class="panel">
-    <h2>⚡ Send Alert</h2>
-
-    <div>
-      <label>Hazard Type</label>
-      <select id="hazard">
-        <option value="cyclone">🌀 Cyclone</option>
-        <option value="flood">🌊 Flood</option>
-        <option value="landslide">⛰️ Landslide</option>
-      </select>
-
-      <label>Severity Level</label>
-      <select id="severity">
-        <!-- Options populated by JS based on hazard -->
-      </select>
-
-      <label>Affected Districts</label>
-      <div class="checkbox-group" id="district-checkboxes">
-        <!-- Populated by JS -->
+    <div class="ptitle red">⚡ Alert Dispatch</div>
+    <div class="pbody">
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val" id="s-alerts">0</div><div class="stat-lbl">ALERTS</div></div>
+        <div class="stat"><div class="stat-val" id="s-confirm">0</div><div class="stat-lbl">CONFIRMS</div></div>
+        <div class="stat"><div class="stat-val" id="s-esc">0</div><div class="stat-lbl">ESCALATED</div></div>
       </div>
-
-      <button class="btn-alert" onclick="sendAlert()">🚨 DISPATCH ALERT</button>
-    </div>
-
-    <div class="confirm-section">
-      <h2 style="margin-top:10px;">✅ Log Volunteer Confirmation</h2>
-      <label>District</label>
-      <select id="conf-district">
-        <option value="Cox's Bazar">Cox's Bazar</option>
-        <option value="Khulna">Khulna</option>
-        <option value="Sylhet">Sylhet</option>
-        <option value="Sunamganj">Sunamganj</option>
-      </select>
-      <label>Upazila</label>
-      <input type="text" id="conf-upazila" placeholder="e.g. Teknaf"/>
-      <label>Volunteer Name</label>
-      <input type="text" id="conf-name" placeholder="e.g. Volunteer Rahim"/>
-      <button class="btn-confirm" onclick="logConfirmation()">✅ Confirm Receipt</button>
+      <div class="sep"></div>
+      <div><div class="flabel">Hazard Type</div>
+        <select id="hazard" onchange="updateSeverity();updatePop();">
+          <option value="cyclone">🌀 Cyclone</option>
+          <option value="flood">🌊 Flood</option>
+          <option value="landslide">⛰️ Landslide</option>
+        </select></div>
+      <div><div class="flabel">Severity Level</div><select id="severity" onchange="updatePop()"></select></div>
+      <div><div class="flabel">Affected Districts</div><div id="dist-checks" style="display:flex;flex-direction:column;gap:4px;"></div></div>
+      <div class="sep"></div>
+      <div class="ptitle purple" style="padding:0;border:none;margin-bottom:6px;font-size:0.67rem;">🤖 AI Alert Generator</div>
+      <div class="ai-box">
+        <div class="ai-label">⚡ CONTEXT-AWARE AI WARNING</div>
+        <div class="ai-spinner" id="ai-spinner"><span>Generating</span><span class="sdots"><span>.</span><span>.</span><span>.</span></span></div>
+        <div class="ai-text" id="ai-msg">Select hazard + districts, then generate.</div>
+      </div>
+      <button class="btn-ai" id="btn-ai" onclick="generateAIAlert()">🤖 <span>GENERATE AI WARNING</span></button>
+      <div class="sep"></div>
+      <button class="btn-dispatch" onclick="dispatchAlert()"><span>🚨 DISPATCH ALERT</span></button>
+      <div class="sep"></div>
+      <div class="ptitle green" style="padding:0;border:none;margin-bottom:6px;font-size:0.67rem;">✅ Volunteer Confirmation</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div><div class="flabel">District</div>
+          <select id="conf-dist"><option>Cox's Bazar</option><option>Khulna</option><option>Sylhet</option><option>Sunamganj</option></select></div>
+        <div><div class="flabel">Upazila</div><input type="text" id="conf-upa" placeholder="e.g. Teknaf"/></div>
+        <div><div class="flabel">Volunteer Name</div><input type="text" id="conf-name" placeholder="e.g. Volunteer Rahim"/></div>
+        <button class="btn-sm" onclick="logConfirmation()">✅ CONFIRM RECEIPT</button>
+      </div>
     </div>
   </div>
 
-  <!-- MAP -->
-  <div id="map"></div>
+  <!-- CENTER -->
+  <div class="center-col">
+    <div class="ptitle" style="flex-shrink:0;">🗺 Live Hazard Map — Bangladesh</div>
+    <div id="map" style="position:relative;">
+      <div class="alert-banner" id="alert-banner">⚡ ALERT DISPATCHED</div>
+    </div>
+    <div class="bottom-strip">
+      <div class="bs-panel">
+        <div class="ptitle red" style="font-size:0.63rem;">⏱ Escalation Timers</div>
+        <div style="padding:8px;overflow-y:auto;flex:1;"><div class="esc-list" id="esc-list"><div class="esc-empty">No active alerts.</div></div></div>
+      </div>
+      <div class="bs-panel">
+        <div class="ptitle warn" style="font-size:0.63rem;">👥 Population Impact</div>
+        <div style="padding:8px;overflow-y:auto;flex:1;" id="pop-panel"><div class="pop-empty">Select districts.</div></div>
+      </div>
+    </div>
+  </div>
 
-  <!-- ALERT LOG -->
-  <div class="log-panel">
-    <h2>📋 System Log</h2>
-    <div id="log-entries">
-      <div class="log-entry">System initialized. Monitoring 4 districts. Awaiting alerts.</div>
+  <!-- RIGHT -->
+  <div class="panel">
+    <div class="ptitle">📡 Channel Status</div>
+    <div class="pbody">
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div class="channel-item" id="ch-sms"><div class="ch-icon">📱</div><div class="ch-info"><div class="ch-name">SMS Broadcast</div><div class="ch-desc">No internet required</div></div><div class="ch-s idle" id="ch-sms-s">IDLE</div></div>
+        <div class="channel-item" id="ch-ivr"><div class="ch-icon">📞</div><div class="ch-info"><div class="ch-name">IVR Voice Call</div><div class="ch-desc">Elderly & low-literacy</div></div><div class="ch-s idle" id="ch-ivr-s">IDLE</div></div>
+        <div class="channel-item" id="ch-web"><div class="ch-icon">🖥️</div><div class="ch-info"><div class="ch-name">Web Dashboard</div><div class="ch-desc">Authority coordinators</div></div><div class="ch-s idle" id="ch-web-s">IDLE</div></div>
+        <div class="channel-item" id="ch-spk"><div class="ch-icon">📢</div><div class="ch-info"><div class="ch-name">Loudspeaker Relay</div><div class="ch-desc">Poor-connectivity zones</div></div><div class="ch-s idle" id="ch-spk-s">IDLE</div></div>
+      </div>
+      <div class="sep"></div>
+      <div class="ptitle purple" style="padding:0;border:none;margin-bottom:6px;font-size:0.67rem;">⚖ Legal Compliance Tracker</div>
+      <div id="legal-grid" style="display:flex;flex-direction:column;gap:4px;"></div>
+      <div class="sep"></div>
+      <div class="ptitle green" style="padding:0;border:none;margin-bottom:6px;font-size:0.67rem;">👥 Volunteer Network</div>
+      <div id="vol-list" style="display:flex;flex-direction:column;gap:3px;"></div>
+      <div class="sep"></div>
+      <div class="ptitle" style="padding:0;border:none;margin-bottom:6px;font-size:0.67rem;">📋 System Log</div>
+      <div id="log-list" style="display:flex;flex-direction:column;gap:3px;">
+        <div class="log-item info"><span class="log-time">--:--</span>System initialized.</div>
+      </div>
     </div>
   </div>
 
 </div>
+</div>
+
+<!-- ══════════════════════════════════
+     TAB 2: WEATHER FEED
+══════════════════════════════════ -->
+<div class="tab-pane" id="tab-weather" style="flex-direction:column;overflow:hidden;">
+  <div class="wx-ticker"><div class="wx-ticker-inner" id="wx-ticker">Loading BMD weather feed...</div></div>
+  <div style="padding:14px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:12px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start;">
+      <div>
+        <div class="ptitle warn" style="padding:0;border:none;margin-bottom:10px;">🌦 District Weather Conditions</div>
+        <div class="weather-grid" id="weather-grid"></div>
+        <div class="wx-update" id="wx-update"></div>
+      </div>
+      <div>
+        <div class="ptitle indigo" style="padding:0;border:none;margin-bottom:10px;">📊 72-Hour Forecast Trend</div>
+        <div style="background:var(--bg);border:1px solid var(--border);padding:12px;height:280px;position:relative;">
+          <canvas id="forecast-chart"></canvas>
+        </div>
+        <div style="margin-top:10px;">
+          <div class="ptitle red" style="padding:0;border:none;margin-bottom:8px;font-size:0.67rem;">🚨 Active BMD Advisories</div>
+          <div id="advisories" style="display:flex;flex-direction:column;gap:5px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     TAB 3: SMS SIMULATOR
+══════════════════════════════════ -->
+<div class="tab-pane" id="tab-sms" style="overflow:hidden;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;flex:1;overflow:hidden;">
+
+    <!-- Controls -->
+    <div style="border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;">
+      <div class="ptitle purple">📱 SMS Alert Composer</div>
+      <div class="pbody">
+        <div><div class="flabel">Select Hazard</div>
+          <select id="sms-hazard" onchange="updateSMSPreview()">
+            <option value="cyclone">🌀 Cyclone</option>
+            <option value="flood">🌊 Flood</option>
+            <option value="landslide">⛰️ Landslide</option>
+          </select></div>
+        <div><div class="flabel">Severity</div>
+          <select id="sms-severity" onchange="updateSMSPreview()">
+            <option value="level_7">Signal 7 — Great Danger</option>
+            <option value="level_4">Signal 4 — Danger</option>
+            <option value="level_3">Signal 3 — Watch</option>
+            <option value="level_10">Signal 10 — Maximum</option>
+          </select></div>
+        <div><div class="flabel">Recipient District</div>
+          <select id="sms-district" onchange="updateSMSPreview()">
+            <option>Cox's Bazar</option><option>Khulna</option><option>Sylhet</option><option>Sunamganj</option>
+          </select></div>
+        <div><div class="flabel">Recipient Type</div>
+          <select id="sms-recipient" onchange="updateSMSPreview()">
+            <option value="community">Community Member</option>
+            <option value="volunteer">Volunteer Coordinator</option>
+            <option value="authority">Local Authority</option>
+          </select></div>
+        <div class="sep"></div>
+        <div class="ptitle" style="padding:0;border:none;margin-bottom:6px;font-size:0.67rem;">📝 Message Preview (Editable)</div>
+        <div style="position:relative;">
+          <textarea id="sms-custom" rows="5"
+            style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+            padding:9px;font-family:var(--font-mono);font-size:0.75rem;resize:vertical;line-height:1.5;"
+            oninput="updateSMSFromCustom()"></textarea>
+        </div>
+        <div id="sms-char-count" style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text2);text-align:right;"></div>
+        <button class="btn-sm" onclick="sendSMSSimulation()">📤 SIMULATE SEND</button>
+        <div class="sep"></div>
+        <div class="ptitle green" style="padding:0;border:none;margin-bottom:6px;font-size:0.67rem;">📊 Delivery Statistics</div>
+        <div id="sms-stats" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+    </div>
+
+    <!-- Phone Preview -->
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:var(--bg2);">
+      <div style="font-family:var(--font-cond);font-size:0.7rem;color:var(--text2);letter-spacing:2px;margin-bottom:14px;">RECIPIENT DEVICE PREVIEW</div>
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="phone-status"><span>RightAlert BD</span><span id="ph-time">12:00</span></div>
+          <div class="sms-header">
+            <div class="sms-avatar">BD</div>
+            <div class="sms-sender"><b>ALERT-BD</b>Emergency System</div>
+          </div>
+          <div class="sms-bubble-wrap">
+            <div class="sms-bubble" id="sms-bubble">⚠️ সতর্কতা বার্তা লোড হচ্ছে...</div>
+            <div class="sms-time" id="sms-time">Delivered</div>
+            <div class="sms-read" id="sms-read">✓✓ Read</div>
+          </div>
+          <div class="sms-action-bar">
+            <div class="sms-action">📞 Call</div>
+            <div class="sms-action">🗺 Map</div>
+            <div class="sms-action">✅ Confirm</div>
+          </div>
+        </div>
+        <div class="phone-home"></div>
+      </div>
+      <div style="margin-top:12px;font-family:var(--font-mono);font-size:0.65rem;color:var(--text2);text-align:center;max-width:220px;" id="sms-delivery-note"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     TAB 4: UPAZILA DRILL-DOWN
+══════════════════════════════════ -->
+<div class="tab-pane" id="tab-upazila" style="overflow:hidden;">
+  <div style="display:grid;grid-template-columns:1fr 1fr;flex:1;overflow:hidden;">
+    <div style="border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;">
+      <div class="ptitle indigo">🗺 Select District</div>
+      <div class="pbody"><div class="district-selector" id="dist-selector"></div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;overflow:hidden;">
+      <div class="ptitle indigo" id="upa-panel-title">📍 Upazila Details</div>
+      <div class="pbody" id="upa-panel"><div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--text2);padding:20px;text-align:center;border:1px dashed var(--border);">← Select a district to drill down into upazilas</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     TAB 5: ALERT TIMELINE
+══════════════════════════════════ -->
+<div class="tab-pane" id="tab-timeline" style="flex-direction:column;overflow:hidden;">
+  <div style="display:grid;grid-template-columns:1fr 320px;flex:1;min-height:0;overflow:hidden;">
+    <div style="display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);">
+      <div class="ptitle indigo" style="flex-shrink:0;">📈 Historical Alert & Response Timeline</div>
+      <div style="flex:1;min-height:0;padding:14px;position:relative;">
+        <canvas id="timeline-chart" style="width:100%;height:100%;"></canvas>
+      </div>
+      <div class="timeline-legend">
+        <div class="tl-legend-item"><div class="tl-dot" style="background:var(--accent2)"></div>Cyclone Alerts</div>
+        <div class="tl-legend-item"><div class="tl-dot" style="background:var(--indigo)"></div>Flood Alerts</div>
+        <div class="tl-legend-item"><div class="tl-dot" style="background:var(--warn)"></div>Landslide Alerts</div>
+        <div class="tl-legend-item"><div class="tl-dot" style="background:var(--accent3)"></div>Avg Response Time (min)</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;overflow:hidden;">
+      <div class="ptitle" style="flex-shrink:0;">📋 Alert History Log</div>
+      <div class="pbody" id="history-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ESCALATION NOTIF -->
+<div class="esc-notif" id="esc-notif">
+  <div class="esc-notif-title">🚨 ESCALATION TRIGGERED</div>
+  <div class="esc-notif-body" id="esc-notif-body"></div>
+</div>
 
 <script>
-  // ── CLOCK ──
-  function updateClock() {
-    document.getElementById('clock').textContent =
-      new Date().toLocaleString('en-BD', { timeZone: 'Asia/Dhaka' });
+// ══════════════════════════════════════════
+// CORE DATA
+// ══════════════════════════════════════════
+const DISTRICTS=[
+  {name:"Cox's Bazar",lat:21.4272,lng:92.0058,risk:"high",volunteers:12,
+   pop:2289990,children:687000,elderly:160000,women:1144000,
+   upazilas:[
+     {name:"Teknaf",    pop:282000,risk:"very high",shelters:8, volunteers:3,flood:85,cyclone:95,landslide:40},
+     {name:"Ukhia",     pop:196000,risk:"very high",shelters:6, volunteers:3,flood:80,cyclone:92,landslide:50},
+     {name:"Ramu",      pop:267000,risk:"high",     shelters:10,volunteers:2,flood:65,cyclone:78,landslide:30},
+     {name:"Chakaria",  pop:410000,risk:"high",     shelters:12,volunteers:2,flood:70,cyclone:80,landslide:35},
+     {name:"Maheshkhali",pop:312000,risk:"high",    shelters:9, volunteers:2,flood:72,cyclone:82,landslide:20}
+   ],connectivity:"poor"},
+  {name:"Khulna",lat:22.8456,lng:89.5403,risk:"high",volunteers:18,
+   pop:2318527,children:695000,elderly:162000,women:1159000,
+   upazilas:[
+     {name:"Dacope",    pop:181000,risk:"very high",shelters:7, volunteers:4,flood:90,cyclone:88,landslide:5},
+     {name:"Koyra",     pop:217000,risk:"very high",shelters:8, volunteers:4,flood:88,cyclone:85,landslide:5},
+     {name:"Paikgacha", pop:210000,risk:"high",     shelters:9, volunteers:4,flood:75,cyclone:70,landslide:8},
+     {name:"Batiaghata",pop:178000,risk:"medium",   shelters:6, volunteers:3,flood:65,cyclone:60,landslide:5},
+     {name:"Dumuria",   pop:260000,risk:"medium",   shelters:8, volunteers:3,flood:60,cyclone:55,landslide:8}
+   ],connectivity:"moderate"},
+  {name:"Sylhet",lat:24.8949,lng:91.8687,risk:"medium",volunteers:9,
+   pop:3482000,children:1044000,elderly:244000,women:1741000,
+   upazilas:[
+     {name:"Companiganj",pop:198000,risk:"high",    shelters:5, volunteers:2,flood:75,cyclone:30,landslide:65},
+     {name:"Gowainghat", pop:219000,risk:"high",    shelters:4, volunteers:2,flood:70,cyclone:25,landslide:70},
+     {name:"Jaintapur",  pop:165000,risk:"medium",  shelters:4, volunteers:2,flood:60,cyclone:20,landslide:75},
+     {name:"Kanaighat",  pop:212000,risk:"medium",  shelters:5, volunteers:2,flood:65,cyclone:25,landslide:60},
+     {name:"Beanibazar", pop:258000,risk:"medium",  shelters:6, volunteers:1,flood:55,cyclone:20,landslide:45}
+   ],connectivity:"moderate"},
+  {name:"Sunamganj",lat:25.0658,lng:91.3950,risk:"high",volunteers:7,
+   pop:2468968,children:740000,elderly:173000,women:1234000,
+   upazilas:[
+     {name:"Tahirpur",      pop:205000,risk:"very high",shelters:5,volunteers:2,flood:92,cyclone:20,landslide:30},
+     {name:"Jamalganj",     pop:189000,risk:"very high",shelters:4,volunteers:2,flood:90,cyclone:18,landslide:25},
+     {name:"Bishwamvarpur", pop:162000,risk:"high",     shelters:4,volunteers:2,flood:82,cyclone:15,landslide:40},
+     {name:"Dharmapasha",   pop:198000,risk:"high",     shelters:5,volunteers:1,flood:80,cyclone:15,landslide:35},
+     {name:"Derai",         pop:175000,risk:"medium",   shelters:4,volunteers:0,flood:70,cyclone:10,landslide:30}
+   ],connectivity:"poor"}
+];
+
+const VOLUNTEERS=[
+  {name:"Rahim Uddin",  area:"Teknaf",     district:"Cox's Bazar",status:"standby"},
+  {name:"Nasrin Begum", area:"Ukhia",      district:"Cox's Bazar",status:"standby"},
+  {name:"Karim Hossain",area:"Dacope",     district:"Khulna",     status:"standby"},
+  {name:"Fatema Akter", area:"Koyra",      district:"Khulna",     status:"standby"},
+  {name:"Jalal Ahmed",  area:"Gowainghat", district:"Sylhet",     status:"standby"},
+  {name:"Rokeya Khatun",area:"Tahirpur",   district:"Sunamganj",  status:"standby"}
+];
+
+const LEGAL_FRAMEWORK=[
+  {id:"dma21",  law:"DMA 2012 — §21",    desc:"DDMC relay to community level",           icon:"⚖",status:"idle"},
+  {id:"dma30",  law:"DMA 2012 — §30",    desc:"Authority confirmation within 30 mins",   icon:"🏛",status:"idle"},
+  {id:"sendai", law:"Sendai — Target G",  desc:"Universal early warning by 2030",         icon:"🌐",status:"idle"},
+  {id:"undrr",  law:"UNDRR Protocol 4.2",desc:"Last-mile dissemination to vulnerable",   icon:"🇺🇳",status:"idle"},
+  {id:"bdnap",  law:"BD NAP 2023 §18",   desc:"Child-centred anticipatory action",       icon:"👶",status:"idle"},
+  {id:"conf",   law:"Confirmation Proto.",desc:"Volunteer receipt within 30 mins",        icon:"✅",status:"idle"}
+];
+
+const SEVERITY_LABELS={
+  cyclone:[["level_3","Signal 3 — Watch"],["level_4","Signal 4 — Danger"],["level_7","Signal 7 — Great Danger"],["level_10","Signal 10 — Maximum"]],
+  flood:[["low","Low — Watch"],["medium","Medium — Warning"],["high","High — Emergency"]],
+  landslide:[["watch","Watch"],["warning","Warning"],["emergency","Emergency"]]
+};
+
+const SMS_TEMPLATES={
+  cyclone:{
+    level_3:"⚠️ সতর্কতা সংকেত ৩: ঘূর্ণিঝড় সম্ভাবনা। আশ্রয়কেন্দ্রের প্রস্তুতি নিন। খাবার ও পানি সংগ্রহ করুন।\n\nRightAlert BD | DMA §21",
+    level_4:"🚨 বিপদ সংকেত ৪: ঘূর্ণিঝড় বিপজ্জনক। এখনই নিকটতম আশ্রয়কেন্দ্রে যান। দেরি করবেন না!\n\nRightAlert BD | DMA §21",
+    level_7:"🆘 মহাবিপদ সংকেত ৭: ঘূর্ণিঝড় অত্যন্ত বিপজ্জনক। অবিলম্বে আশ্রয়কেন্দ্রে যান — জীবন বিপন্ন!\n\nRightAlert BD | DMA §21",
+    level_10:"🆘 সর্বোচ্চ বিপদ সংকেত ১০: মৃত্যুঝুঁকি! তাৎক্ষণিকভাবে সরে যান! উপকূল ছেড়ে যান!\n\nRightAlert BD | DMA §21"
+  },
+  flood:{
+    low:"⚠️ বন্যা সতর্কতা: নদীর পানি বাড়ছে। নিচু এলাকার বাসিন্দারা সতর্ক থাকুন।\n\nRightAlert BD | DMA §21",
+    medium:"🚨 বন্যা বিপদ: দ্রুত উঁচু স্থানে যান। শিশু ও বয়স্কদের আগে সরান।\n\nRightAlert BD | DMA §21",
+    high:"🆘 মারাত্মক বন্যা: এখনই ঘর ছাড়ুন! আশ্রয়কেন্দ্রে যান। স্বেচ্ছাসেবী ডাকুন।\n\nRightAlert BD | DMA §21"
+  },
+  landslide:{
+    watch:"⚠️ ভূমিধস সতর্কতা: পাহাড়ি এলাকায় থাকবেন না। নিরাপদ দূরত্বে থাকুন।\n\nRightAlert BD | DMA §21",
+    warning:"🚨 ভূমিধস বিপদ: পাহাড়ি এলাকা ছেড়ে যান। বৃষ্টিতে বাইরে যাবেন না।\n\nRightAlert BD | DMA §21",
+    emergency:"🆘 ভূমিধস জরুরি: তাৎক্ষণিকভাবে সরে যান! পাহাড় থেকে দূরে থাকুন!\n\nRightAlert BD | DMA §21"
   }
-  setInterval(updateClock, 1000);
-  updateClock();
+};
 
-  // ── SEVERITY OPTIONS ──
-  const severityOptions = {
-    cyclone:   [["level_3","Signal 3 - Warning"],["level_4","Signal 4 - Danger"],
-                ["level_7","Signal 7 - Great Danger"],["level_10","Signal 10 - Maximum"]],
-    flood:     [["low","Low - Watch"],["medium","Medium - Warning"],["high","High - Emergency"]],
-    landslide: [["watch","Watch"],["warning","Warning"],["emergency","Emergency"]]
-  };
+const AUTHORITY_TEMPLATES={
+  volunteer:"🔴 COORDINATOR ALERT\nDistrict: {district}\nHazard: {hazard} | Severity: {severity}\nAction: Deploy to assigned upazilas immediately.\nConfirm receipt: Reply CONFIRM to this number.\nLegal: DMA 2012 §21 — DDMC\nRightAlert BD",
+  authority:"🏛 OFFICIAL NOTICE\nDistrict: {district}\nHazard: {hazard} | Severity: {severity}\nAction required: Activate DDMC protocol.\nEscalation if no response in 30 mins.\nSendai Framework Target G compliance required.\nRightAlert BD"
+};
 
-  document.getElementById('hazard').addEventListener('change', updateSeverity);
+const riskColors={high:"#ff3c3c",medium:"#ffb300",low:"#00ff9d","very high":"#ff0066"};
 
-  function updateSeverity() {
-    const hazard = document.getElementById('hazard').value;
-    const sel = document.getElementById('severity');
-    sel.innerHTML = '';
-    severityOptions[hazard].forEach(([val, label]) => {
-      const opt = document.createElement('option');
-      opt.value = val; opt.textContent = label;
-      sel.appendChild(opt);
-    });
-  }
-  updateSeverity();
+// STATE
+let alertCount=0,confirmCount=0,escCount=0;
+let activeTimers={},timerIntervals={};
+const ESC_DEMO=90;
+let alertHistory=[];
+let forecastChart=null,timelineChart=null;
 
-  // ── DISTRICT CHECKBOXES ──
-  const districts = [
-    { name: "Cox's Bazar", risk: "high" },
-    { name: "Khulna",      risk: "high" },
-    { name: "Sylhet",      risk: "medium" },
-    { name: "Sunamganj",   risk: "high" }
+// ══════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════
+function tick(){
+  const now=new Date();
+  const t=now.toLocaleTimeString('en-BD',{hour12:false,timeZone:'Asia/Dhaka'});
+  document.getElementById('clock').textContent=t+' BDT';
+  document.querySelectorAll('.ph-time').forEach(el=>el.textContent=t.slice(0,5));
+  const el=document.getElementById('ph-time');if(el)el.textContent=t.slice(0,5);
+}
+setInterval(tick,1000);tick();
+
+// ══════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════
+function switchTab(id,btn){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='weather')initWeather();
+  if(id==='timeline')initTimeline();
+  if(id==='sms')updateSMSPreview();
+}
+
+// ══════════════════════════════════════════
+// MAP
+// ══════════════════════════════════════════
+const map=L.map('map',{zoomControl:false}).setView([23.5,90.3],7);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+const mapCSS=document.createElement('style');
+mapCSS.textContent=`
+  @keyframes pulsate{0%{transform:scale(0.5);opacity:1}100%{transform:scale(2.8);opacity:0}}
+  .leaflet-tile{filter:brightness(0.26) saturate(0.35) hue-rotate(195deg);}
+  .leaflet-popup-content-wrapper{background:#0c1525!important;border:1px solid #0e2240!important;border-radius:0!important;box-shadow:0 0 20px rgba(0,229,255,0.1)!important;}
+  .leaflet-popup-content{margin:0!important;}
+  .leaflet-popup-tip{background:#0c1525!important;}`;
+document.head.appendChild(mapCSS);
+
+const markers={};
+DISTRICTS.forEach(d=>{
+  const m=L.marker([d.lat,d.lng],{icon:makeIcon(riskColors[d.risk])}).addTo(map);
+  m.bindPopup(makePopup(d,riskColors[d.risk]));
+  markers[d.name]=m;
+});
+function makeIcon(col){
+  return L.divIcon({className:'',iconSize:[40,40],iconAnchor:[20,20],
+    html:`<div style="position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+      <div style="position:absolute;width:40px;height:40px;border-radius:50%;border:2px solid ${col};opacity:0.3;animation:pulsate 2.5s ease-out infinite;"></div>
+      <div style="width:16px;height:16px;border-radius:50%;background:${col};opacity:0.9;border:2px solid white;"></div>
+    </div>`});
+}
+function makePopup(d,col){
+  return `<div style="background:#0c1525;padding:10px;color:#c8d8f0;font-family:monospace;min-width:190px;font-size:0.7rem;">
+    <div style="color:${col};font-weight:bold;font-size:0.92rem;margin-bottom:5px;">${d.name}</div>
+    <div>Risk: <span style="color:${col}">${d.risk.toUpperCase()}</span> | Connectivity: ${d.connectivity}</div>
+    <div style="margin-top:4px;">👥 ${(d.pop/1000000).toFixed(2)}M total | 👶 ${(d.children/1000).toFixed(0)}K children</div>
+    <div>🧓 ${(d.elderly/1000).toFixed(0)}K elderly | 🤝 ${d.volunteers} volunteers</div>
+    <div style="margin-top:5px;color:#5a7a9e;">📍 ${d.upazilas.map(u=>u.name).join(' · ')}</div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════
+// DISTRICT CHECKBOXES
+// ══════════════════════════════════════════
+const dcc=document.getElementById('dist-checks');
+DISTRICTS.forEach(d=>{
+  const div=document.createElement('div');div.className='d-check';
+  div.innerHTML=`<div class="d-box"></div><div class="d-name">${d.name}</div><div class="risk-badge rb-${d.risk}">${d.risk}</div>`;
+  div.onclick=()=>{div.classList.toggle('active');updatePop();};
+  dcc.appendChild(div);
+});
+
+// ══════════════════════════════════════════
+// SEVERITY
+// ══════════════════════════════════════════
+function updateSeverity(){
+  const h=document.getElementById('hazard').value;
+  const sel=document.getElementById('severity');sel.innerHTML='';
+  SEVERITY_LABELS[h].forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;sel.appendChild(o);});
+}
+updateSeverity();
+
+// ══════════════════════════════════════════
+// LEGAL TRACKER
+// ══════════════════════════════════════════
+function renderLegal(){
+  const g=document.getElementById('legal-grid');g.innerHTML='';
+  LEGAL_FRAMEWORK.forEach(item=>{
+    const cls=item.status==='met'?'triggered':item.status==='breached'?'breached':item.status==='pending'?'pending':'';
+    const bCls=item.status==='met'?'lb-met':item.status==='breached'?'lb-breach':item.status==='pending'?'lb-pending':'lb-idle';
+    const bTxt=item.status==='met'?'MET ✓':item.status==='breached'?'BREACH ✗':item.status==='pending'?'PENDING':'IDLE';
+    g.innerHTML+=`<div class="legal-item ${cls}"><div class="legal-icon">${item.icon}</div>
+      <div class="legal-body"><div class="legal-law">${item.law}</div><div class="legal-desc">${item.desc}</div></div>
+      <div class="legal-badge ${bCls}">${bTxt}</div></div>`;
+  });
+}
+renderLegal();
+function setLegal(id,status){const i=LEGAL_FRAMEWORK.find(x=>x.id===id);if(i){i.status=status;renderLegal();}}
+
+// ══════════════════════════════════════════
+// VOLUNTEERS
+// ══════════════════════════════════════════
+function renderVols(){
+  const vl=document.getElementById('vol-list');vl.innerHTML='';
+  VOLUNTEERS.forEach(v=>{
+    const dc=v.status==='confirmed'?'confirmed':v.status==='alerted'?'alerted':'';
+    const sc=v.status==='confirmed'?'ch-s sent':v.status==='alerted'?'ch-s active':'ch-s idle';
+    vl.innerHTML+=`<div class="vol-item"><div class="vdot ${dc}"></div>
+      <div style="flex:1;font-size:0.67rem;">${v.name}</div>
+      <div style="color:var(--text2);font-size:0.62rem;">${v.area}</div>
+      <div class="${sc}" style="font-size:0.57rem;padding:1px 5px;">${v.status.toUpperCase()}</div></div>`;
+  });
+}
+renderVols();
+
+// ══════════════════════════════════════════
+// POPULATION IMPACT
+// ══════════════════════════════════════════
+function updatePop(){
+  const selected=[...document.querySelectorAll('.d-check.active')].map(el=>el.querySelector('.d-name').textContent);
+  const panel=document.getElementById('pop-panel');
+  if(selected.length===0){panel.innerHTML='<div class="pop-empty">Select districts.</div>';return;}
+  const t=selected.reduce((a,n)=>{const d=DISTRICTS.find(x=>x.name===n);return d?{pop:a.pop+d.pop,children:a.children+d.children,elderly:a.elderly+d.elderly,women:a.women+d.women}:a},{pop:0,children:0,elderly:0,women:0});
+  const fmt=n=>n>=1000000?(n/1000000).toFixed(2)+'M':(n/1000).toFixed(0)+'K';
+  const pct=(a,b)=>Math.round(a/b*100);
+  panel.innerHTML=`
+    <div class="pop-total"><div class="pop-num">${fmt(t.pop)}</div><div class="pop-lbl">TOTAL AT RISK</div></div>
+    <div class="pop-grid">
+      <div class="pop-card"><div class="pop-card-val" style="color:var(--accent2);">${fmt(t.children)}</div><div class="pop-card-lbl">👶 CHILDREN</div></div>
+      <div class="pop-card"><div class="pop-card-val" style="color:var(--warn);">${fmt(t.elderly)}</div><div class="pop-card-lbl">🧓 ELDERLY</div></div>
+    </div>
+    <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
+      <div><div class="pop-bar-label"><span>Children</span><span>${pct(t.children,t.pop)}%</span></div><div class="pop-bar-track"><div class="pop-bar-fill" style="width:${pct(t.children,t.pop)}%;background:var(--accent2);"></div></div></div>
+      <div><div class="pop-bar-label"><span>Elderly</span><span>${pct(t.elderly,t.pop)}%</span></div><div class="pop-bar-track"><div class="pop-bar-fill" style="width:${pct(t.elderly,t.pop)}%;background:var(--warn);"></div></div></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// ESCALATION TIMER
+// ══════════════════════════════════════════
+function startEscTimer(alertId,districts){
+  const start=Date.now();
+  activeTimers[alertId]={districts,started:start,duration:ESC_DEMO,confirmed:false};
+  renderEscTimers();
+  const iv=setInterval(()=>{
+    const elapsed=Math.floor((Date.now()-start)/1000);
+    const rem=ESC_DEMO-elapsed;
+    if(rem<=0){clearInterval(iv);if(!activeTimers[alertId]?.confirmed)triggerEsc(alertId,districts);return;}
+    const pct=((ESC_DEMO-rem)/ESC_DEMO)*100;
+    const barEl=document.getElementById(`eb-${alertId}`);
+    const timeEl=document.getElementById(`et-${alertId}`);
+    if(barEl){barEl.style.width=pct+'%';barEl.className='esc-bar'+(pct>80?' danger':pct>50?' warn':'');}
+    if(timeEl){const m=Math.floor(rem/60),s=rem%60;timeEl.className='esc-time '+(pct>80?'danger':pct>50?'warn':'ok');timeEl.textContent=`${m}:${s.toString().padStart(2,'0')} left`;}
+  },1000);
+  timerIntervals[alertId]=iv;
+}
+function triggerEsc(alertId,districts){
+  escCount++;document.getElementById('s-esc').textContent=escCount;
+  const sEl=document.getElementById(`es-${alertId}`);if(sEl){sEl.textContent='ESCALATED';sEl.className='esc-status-badge escalated';}
+  setLegal('dma30','breached');setLegal('conf','breached');
+  const n=document.getElementById('esc-notif');
+  document.getElementById('esc-notif-body').textContent=`No confirmation from ${districts.join(', ')}. Escalated to DDMC & BMD.`;
+  n.classList.add('show');setTimeout(()=>n.classList.remove('show'),6000);
+  addLog(`🚨 ESCALATED: ${districts.join(', ')} — DDMC alerted`,'alert');
+}
+function markTimerConfirmed(district){
+  Object.keys(activeTimers).forEach(id=>{
+    const t=activeTimers[id];
+    if(t.districts.includes(district)&&!t.confirmed){
+      t.confirmed=true;clearInterval(timerIntervals[id]);
+      const sEl=document.getElementById(`es-${id}`);if(sEl){sEl.textContent='CONFIRMED';sEl.className='esc-status-badge confirmed';}
+      const bEl=document.getElementById(`eb-${id}`);if(bEl){bEl.className='esc-bar';bEl.style.width='100%';bEl.style.background='var(--accent3)';}
+      setLegal('conf','met');setLegal('dma30','met');
+    }
+  });
+}
+function renderEscTimers(){
+  const list=document.getElementById('esc-list');
+  const ids=Object.keys(activeTimers);
+  if(!ids.length){list.innerHTML='<div class="esc-empty">No active alerts.</div>';return;}
+  list.innerHTML='';
+  ids.slice(-3).forEach(id=>{
+    const t=activeTimers[id];
+    const div=document.createElement('div');div.className='esc-item';
+    div.innerHTML=`<div class="esc-header"><span class="esc-id">${id}</span><span class="esc-district">${t.districts.slice(0,2).join(', ')}</span></div>
+      <div class="esc-progress"><div class="esc-bar" id="eb-${id}" style="width:0%"></div></div>
+      <div class="esc-footer"><span class="esc-time ok" id="et-${id}">${Math.floor(t.duration/60)}:00 left</span>
+      <span class="esc-status-badge waiting" id="es-${id}">WAITING</span></div>`;
+    list.appendChild(div);
+  });
+}
+
+// ══════════════════════════════════════════
+// AI ALERT GENERATOR
+// ══════════════════════════════════════════
+async function generateAIAlert(){
+  const selected=[...document.querySelectorAll('.d-check.active')].map(el=>el.querySelector('.d-name').textContent);
+  const hazard=document.getElementById('hazard').value;
+  const severity=document.getElementById('severity').value;
+  const btn=document.getElementById('btn-ai');
+  const spinner=document.getElementById('ai-spinner');
+  const msgEl=document.getElementById('ai-msg');
+  btn.disabled=true;spinner.classList.add('show');msgEl.style.display='none';
+  const distInfo=selected.map(n=>{const d=DISTRICTS.find(x=>x.name===n);return d?`${n}(pop:${(d.pop/1e6).toFixed(1)}M,children:${(d.children/1000).toFixed(0)}K,connectivity:${d.connectivity})`:''}).join('; ');
+  const prompt=`You are RightAlert BD, Bangladesh's emergency warning system.\nGenerate a warning for:\nHazard: ${hazard.toUpperCase()}, Severity: ${severity}\nDistricts: ${selected.join(', ')}\nDetails: ${distInfo||'N/A'}\n\nRespond EXACTLY in this format:\n🔴 বাংলা: [Simple Bangla message, max 2 sentences, clear action]\n🔵 English: [Brief coordinator summary]\n⚖ Legal: [Responsible authority + legal basis]`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:350,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'Generation failed.';
+    spinner.classList.remove('show');msgEl.style.display='block';msgEl.textContent=text;
+    addLog('🤖 AI generated contextual alert','ai');setLegal('dma21','met');
+  }catch(e){
+    spinner.classList.remove('show');msgEl.style.display='block';
+    const fb={cyclone:{level_7:"🔴 বাংলা: মহাবিপদ! অবিলম্বে আশ্রয়কেন্দ্রে যান!\n🔵 English: Critical cyclone. Evacuate now.\n⚖ Legal: DMA 2012 §21 — DDMC mandatory relay"},
+              flood:{high:"🔴 বাংলা: মারাত্মক বন্যা! উঁচু স্থানে যান!\n🔵 English: Severe flood. Move to high ground.\n⚖ Legal: DMA 2012 §21 — DDMC mandatory relay"},
+              landslide:{emergency:"🔴 বাংলা: ভূমিধস বিপদ! পাহাড় ছেড়ে যান!\n🔵 English: Landslide emergency. Evacuate hills.\n⚖ Legal: DMA 2012 §21 — DDMC mandatory relay"}};
+    msgEl.textContent=(fb[hazard]||{})[severity]||`🔴 বাংলা: সতর্কতা!\n🔵 English: Alert for ${selected.join(', ')}.\n⚖ Legal: DMA 2012 §21`;
+    addLog('🤖 AI alert generated (offline mode)','ai');
+  }finally{btn.disabled=false;}
+}
+
+// ══════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════
+function addLog(msg,type='info'){
+  const ll=document.getElementById('log-list');
+  const t=new Date().toLocaleTimeString('en-BD',{hour12:false,timeZone:'Asia/Dhaka'}).slice(0,5);
+  const div=document.createElement('div');div.className=`log-item ${type}`;
+  div.innerHTML=`<span class="log-time">${t}</span>${msg}`;
+  ll.prepend(div);while(ll.children.length>30)ll.removeChild(ll.lastChild);
+}
+
+// ══════════════════════════════════════════
+// CHANNEL FIRE
+// ══════════════════════════════════════════
+function fireChannels(){
+  [['sms',0],['ivr',500],['web',1000],['spk',1500]].forEach(([ch,d])=>{
+    const el=document.getElementById(`ch-${ch}`),sl=document.getElementById(`ch-${ch}-s`);
+    setTimeout(()=>{el.classList.add('firing');sl.textContent='SENDING';sl.className='ch-s active';},d);
+    setTimeout(()=>{el.classList.remove('firing');el.classList.add('done');sl.textContent='SENT ✓';sl.className='ch-s sent';},d+900);
+    setTimeout(()=>{el.classList.remove('done');sl.textContent='IDLE';sl.className='ch-s idle';},d+9000);
+  });
+}
+
+// ══════════════════════════════════════════
+// MAP FLASH
+// ══════════════════════════════════════════
+function flashMap(selected){
+  selected.forEach(name=>{
+    const m=markers[name];if(!m)return;
+    m.setIcon(L.divIcon({className:'',iconSize:[50,50],iconAnchor:[25,25],
+      html:`<div style="width:50px;height:50px;border-radius:50%;background:rgba(255,60,60,0.5);border:3px solid #ff3c3c;animation:pulsate 0.5s ease-out;"></div>`}));
+    setTimeout(()=>{const d=DISTRICTS.find(x=>x.name===name);if(d)m.setIcon(makeIcon(riskColors[d.risk]));},3000);
+  });
+  const fd=DISTRICTS.find(x=>x.name===selected[0]);
+  if(fd)map.flyTo([fd.lat,fd.lng],9,{duration:1.2});
+}
+
+// ══════════════════════════════════════════
+// DISPATCH
+// ══════════════════════════════════════════
+function dispatchAlert(){
+  const selected=[...document.querySelectorAll('.d-check.active')].map(el=>el.querySelector('.d-name').textContent);
+  if(!selected.length){addLog('⚠ No districts selected','info');return;}
+  alertCount++;document.getElementById('s-alerts').textContent=alertCount;
+  const h=document.getElementById('hazard').value;
+  const s=document.getElementById('severity').value;
+  const alertId=`RA-${Date.now().toString().slice(-6)}`;
+  const banner=document.getElementById('alert-banner');
+  banner.classList.add('show');setTimeout(()=>banner.classList.remove('show'),2500);
+  flashMap(selected);fireChannels();startEscTimer(alertId,selected);updatePop();
+  setLegal('dma21','met');setLegal('sendai','met');setLegal('undrr','met');setLegal('bdnap','met');
+  setLegal('dma30','pending');setLegal('conf','pending');
+  VOLUNTEERS.forEach(v=>{if(selected.includes(v.district))v.status='alerted';});
+  renderVols();
+  // Record history
+  alertHistory.push({id:alertId,time:new Date(),hazard:h,severity:s,districts:selected,responseTime:null});
+  addLog(`🚨 ${alertId} → ${selected.join(', ')} | ${h.toUpperCase()} ${s}`,'alert');
+  addLog(`⏱ Escalation timer: ${ESC_DEMO}s`,'info');
+  addLog(`⚖ DMA §21 + Sendai G + UNDRR 4.2 triggered`,'ai');
+  selected.forEach(name=>{
+    const d=DISTRICTS.find(x=>x.name===name);
+    if(d)addLog(`👥 ${name}: ${d.volunteers} vol | ${(d.pop/1e6).toFixed(2)}M at risk`,'info');
+  });
+}
+
+// ══════════════════════════════════════════
+// CONFIRM
+// ══════════════════════════════════════════
+function logConfirmation(){
+  const dist=document.getElementById('conf-dist').value;
+  const upa=document.getElementById('conf-upa').value.trim();
+  const vname=document.getElementById('conf-name').value.trim();
+  if(!upa||!vname){addLog('⚠ Fill upazila + volunteer name','info');return;}
+  confirmCount++;document.getElementById('s-confirm').textContent=confirmCount;
+  const v=VOLUNTEERS.find(x=>x.area.toLowerCase()===upa.toLowerCase()||x.name.toLowerCase()===vname.toLowerCase());
+  if(v){v.status='confirmed';renderVols();}
+  markTimerConfirmed(dist);
+  // Update response time
+  const ah=alertHistory.find(x=>x.districts.includes(dist)&&!x.responseTime);
+  if(ah){ah.responseTime=Math.round((Date.now()-ah.time)/60000);}
+  addLog(`✅ CONFIRMED: ${upa}, ${dist} — ${vname}`,'confirm');
+  document.getElementById('conf-upa').value='';document.getElementById('conf-name').value='';
+}
+
+// ══════════════════════════════════════════
+// WEATHER FEED
+// ══════════════════════════════════════════
+const WEATHER_DATA=[
+  {district:"Cox's Bazar",icon:"🌀",temp:28,desc:"Cyclonic conditions",wind:"72 km/h NE",humidity:88,pressure:982,visibility:4,alert:"high",forecast:[29,30,31,28,26,24,23]},
+  {district:"Khulna",     icon:"⛈",temp:31,desc:"Thunderstorm likely",wind:"45 km/h SW",humidity:82,pressure:995,visibility:7,alert:"high",forecast:[32,31,30,29,28,27,26]},
+  {district:"Sylhet",     icon:"🌧",temp:26,desc:"Heavy rainfall",    wind:"28 km/h NW",humidity:91,pressure:1002,visibility:5,alert:"medium",forecast:[27,26,25,26,27,26,25]},
+  {district:"Sunamganj",  icon:"🌊",temp:27,desc:"Flash flood risk",  wind:"22 km/h N", humidity:89,pressure:1005,visibility:8,alert:"high",forecast:[28,27,28,29,28,27,26]}
+];
+
+function initWeather(){
+  if(document.getElementById('weather-grid').children.length)return;
+  renderWeatherCards();
+  renderForecastChart();
+  renderAdvisories();
+  document.getElementById('wx-update').textContent='Last updated: '+new Date().toLocaleTimeString('en-BD',{timeZone:'Asia/Dhaka'})+' BDT | Source: BMD (simulated)';
+  document.getElementById('wx-ticker').innerHTML=
+    `<div class="wx-ticker-inner">🌀 CYCLONE WARNING: Cox's Bazar signal 7 in effect &nbsp;|&nbsp; 🌊 FLOOD ALERT: Sunamganj haor region rising &nbsp;|&nbsp; ⛈ STORM WARNING: Khulna Sundarbans coastal zone &nbsp;|&nbsp; 🌧 HEAVY RAIN: Sylhet-Sunamganj 24hr advisory &nbsp;|&nbsp; 📡 BMD BULLETIN: 3 districts on high alert as of ${new Date().toLocaleDateString('en-BD',{timeZone:'Asia/Dhaka'})}</div>`;
+}
+
+function renderWeatherCards(){
+  const g=document.getElementById('weather-grid');g.innerHTML='';
+  WEATHER_DATA.forEach((w,i)=>{
+    const div=document.createElement('div');div.className='wx-card';
+    div.innerHTML=`<div class="wx-district">${w.district}</div>
+      <div class="wx-icon">${w.icon}</div>
+      <div class="wx-temp">${w.temp}°C</div>
+      <div class="wx-desc">${w.desc}</div>
+      <div class="wx-wind">💨 ${w.wind} | 💧 ${w.humidity}%</div>
+      <div class="wx-alert-flag wx-flag-${w.alert}">${w.alert.toUpperCase()} ALERT</div>
+      <div class="wx-detail">
+        <div class="wx-row"><span>Pressure</span><span>${w.pressure} hPa</span></div>
+        <div class="wx-row"><span>Visibility</span><span>${w.visibility} km</span></div>
+        <div class="wx-row"><span>Humidity</span><span>${w.humidity}%</span></div>
+        <div class="wx-row"><span>Wind</span><span>${w.wind}</span></div>
+      </div>`;
+    div.onclick=()=>{document.querySelectorAll('.wx-card').forEach(c=>c.classList.remove('active'));div.classList.toggle('active');};
+    g.appendChild(div);
+  });
+}
+
+function renderForecastChart(){
+  const ctx=document.getElementById('forecast-chart').getContext('2d');
+  const labels=['Now','+6h','+12h','+18h','+24h','+48h','+72h'];
+  if(forecastChart)forecastChart.destroy();
+  forecastChart=new Chart(ctx,{type:'line',
+    data:{labels,datasets:WEATHER_DATA.map((w,i)=>({
+      label:w.district,data:w.forecast,
+      borderColor:['#ff3c3c','#a855f7','#ffb300','#6366f1'][i],
+      backgroundColor:'transparent',borderWidth:2,pointRadius:3,tension:0.4
+    }))},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{y:{ticks:{color:'#5a7a9e',font:{size:10}},grid:{color:'#0e2240'}},
+              x:{ticks:{color:'#5a7a9e',font:{size:10}},grid:{color:'#0e2240'}}},
+      plugins:{legend:{labels:{color:'#c8d8f0',font:{size:10},boxWidth:10}}}
+    }
+  });
+}
+
+function renderAdvisories(){
+  const adv=[
+    {level:'DANGER',text:"Cyclone signal 7 active — Cox's Bazar coastal zone. All vessels to return port.",color:'var(--accent2)'},
+    {level:'WARNING',text:"Flash flood risk — Sunamganj haor region. Evacuation of low-lying char areas advised.",color:'var(--warn)'},
+    {level:'WATCH',text:"Heavy rainfall advisory — Sylhet-Sunamganj 24hr. Landslide risk elevated.",color:'var(--indigo)'}
   ];
+  const div=document.getElementById('advisories');
+  div.innerHTML=adv.map(a=>`
+    <div style="background:var(--bg);border:1px solid var(--border);border-left:3px solid ${a.color};padding:7px 10px;">
+      <span style="font-family:var(--font-cond);font-size:0.7rem;font-weight:700;color:${a.color};">${a.level}</span>
+      <span style="font-family:var(--font-mono);font-size:0.67rem;color:var(--text2);margin-left:8px;">${a.text}</span>
+    </div>`).join('');
+}
 
-  const cbGroup = document.getElementById('district-checkboxes');
-  districts.forEach(d => {
-    const lbl = document.createElement('label');
-    lbl.innerHTML = `
-      <input type="checkbox" value="${d.name}"/>
-      ${d.name} <span class="risk-${d.risk}">[${d.risk}]</span>
-    `;
-    cbGroup.appendChild(lbl);
-  });
-
-  // ── MAP ──
-  const map = L.map('map').setView([23.5, 90.3], 7);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap'
-  }).addTo(map);
-
-  const districtCoords = {
-    "Cox's Bazar": [21.4272, 92.0058],
-    "Khulna":      [22.8456, 89.5403],
-    "Sylhet":      [24.8949, 91.8687],
-    "Sunamganj":   [25.0658, 91.3950]
-  };
-
-  const riskColors = { high: '#ff4444', medium: '#ffaa00', low: '#22cc88' };
-  const markers = {};
-
-  districts.forEach(d => {
-    const coords = districtCoords[d.name];
-    if (!coords) return;
-    const marker = L.circleMarker(coords, {
-      radius: 16,
-      fillColor: riskColors[d.risk],
-      color: '#fff',
-      weight: 2,
-      opacity: 0.9,
-      fillOpacity: 0.5
-    }).addTo(map);
-    marker.bindPopup(`
-      <strong>${d.name}</strong><br/>
-      Risk: <span style="color:${riskColors[d.risk]}">${d.risk.toUpperCase()}</span>
-    `);
-    markers[d.name] = marker;
-  });
-
-  // ── LOG ──
-  function addLog(msg, type = '') {
-    const div = document.createElement('div');
-    div.className = `log-entry ${type}`;
-    div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    const container = document.getElementById('log-entries');
-    container.prepend(div);
+// ══════════════════════════════════════════
+// SMS SIMULATOR
+// ══════════════════════════════════════════
+function updateSMSPreview(){
+  const h=document.getElementById('sms-hazard').value;
+  const s=document.getElementById('sms-severity').value;
+  const dist=document.getElementById('sms-district').value;
+  const recip=document.getElementById('sms-recipient').value;
+  let msg='';
+  if(recip==='community'){
+    msg=(SMS_TEMPLATES[h]||{})[s]||`⚠️ সতর্কতা: ${h} সংকেত। নিরাপদ স্থানে যান।\n\nRightAlert BD`;
+  }else{
+    const tmpl=(AUTHORITY_TEMPLATES[recip]||AUTHORITY_TEMPLATES.volunteer);
+    msg=tmpl.replace(/{district}/g,dist).replace(/{hazard}/g,h.toUpperCase()).replace(/{severity}/g,s);
   }
+  const ta=document.getElementById('sms-custom');ta.value=msg;
+  updateSMSBubble(msg);
+  document.getElementById('sms-char-count').textContent=`${msg.length} characters | ${Math.ceil(msg.length/160)} SMS segment(s)`;
+  renderSMSStats(dist);
+}
 
-  // ── STATS ──
-  function refreshStats() {
-    fetch('/api/stats')
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('stat-alerts').textContent    = data.total_alerts_sent;
-        document.getElementById('stat-confirms').textContent  = data.confirmations_received;
-        document.getElementById('stat-districts').textContent = data.districts_covered;
-        document.getElementById('stat-volunteers').textContent = data.total_volunteers;
-      });
-  }
-  setInterval(refreshStats, 3000);
-  refreshStats();
+function updateSMSFromCustom(){
+  const msg=document.getElementById('sms-custom').value;
+  updateSMSBubble(msg);
+  document.getElementById('sms-char-count').textContent=`${msg.length} characters | ${Math.ceil(msg.length/160)} SMS segment(s)`;
+}
 
-  // ── SEND ALERT ──
-  function sendAlert() {
-    const hazard   = document.getElementById('hazard').value;
-    const severity = document.getElementById('severity').value;
-    const selected = [...document.querySelectorAll('#district-checkboxes input:checked')]
-                       .map(cb => cb.value);
+function updateSMSBubble(msg){
+  const bubble=document.getElementById('sms-bubble');
+  const t=new Date().toLocaleTimeString('en-BD',{hour12:false,timeZone:'Asia/Dhaka'}).slice(0,5);
+  bubble.textContent=msg;
+  document.getElementById('sms-time').textContent=`Delivered at ${t} BDT`;
+}
 
-    if (selected.length === 0) {
-      alert('Please select at least one district.');
-      return;
+function sendSMSSimulation(){
+  const bubble=document.getElementById('sms-bubble');
+  const dist=document.getElementById('sms-district').value;
+  const d=DISTRICTS.find(x=>x.name===dist);
+  bubble.classList.add('typing');
+  setTimeout(()=>{bubble.classList.remove('typing');
+    document.getElementById('sms-delivery-note').textContent=
+      `✅ Simulated delivery to ${d?d.pop.toLocaleString():0} registered contacts in ${dist}. Estimated reach in poor-connectivity zones via volunteer relay.`;
+    addLog(`📱 SMS simulation: sent to ${dist}`,'confirm');
+  },1200);
+  renderSMSStats(dist);
+}
+
+function renderSMSStats(dist){
+  const d=DISTRICTS.find(x=>x.name===dist);
+  if(!d)return;
+  const registered=Math.round(d.pop*0.35);
+  const ivr=Math.round(d.elderly*0.8);
+  const stats=document.getElementById('sms-stats');
+  stats.innerHTML=[
+    {label:'Registered SMS contacts',val:registered.toLocaleString(),col:'var(--accent)'},
+    {label:'IVR voice call targets',val:ivr.toLocaleString(),col:'var(--warn)'},
+    {label:'Volunteer relay nodes',val:d.volunteers,col:'var(--accent3)'},
+    {label:'Est. total reach',val:Math.round(d.pop*0.72).toLocaleString(),col:'var(--purple)'}
+  ].map(s=>`<div style="display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:0.68rem;padding:4px 7px;background:var(--bg);border:1px solid var(--border);">
+    <span style="color:var(--text2);">${s.label}</span><span style="color:${s.col};font-weight:bold;">${s.val}</span>
+  </div>`).join('');
+}
+updateSMSPreview();
+
+// ══════════════════════════════════════════
+// UPAZILA DRILL-DOWN
+// ══════════════════════════════════════════
+const ds=document.getElementById('dist-selector');
+DISTRICTS.forEach(d=>{
+  const div=document.createElement('div');div.className='dist-select-card';
+  div.innerHTML=`<div><div class="dist-select-name">${d.name}</div>
+    <div class="dist-select-meta">Risk: <span style="color:${riskColors[d.risk]}">${d.risk.toUpperCase()}</span> | ${d.upazilas.length} upazilas | ${d.volunteers} volunteers</div></div>
+    <div class="dist-select-arrow">→</div>`;
+  div.onclick=()=>showUpazilas(d);ds.appendChild(div);
+});
+
+function showUpazilas(district){
+  document.getElementById('upa-panel-title').textContent=`📍 ${district.name} — Upazila Risk Details`;
+  const panel=document.getElementById('upa-panel');
+  panel.innerHTML=`
+    <div class="upa-district-title">${district.name} · ${district.upazilas.length} Upazilas · Connectivity: ${district.connectivity.toUpperCase()}</div>
+    <div class="upa-grid">
+      ${district.upazilas.map(u=>{
+        const rCol=u.risk==='very high'?'#ff0066':riskColors[u.risk]||'#5a7a9e';
+        return `<div class="upa-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="upa-name">${u.name}</div>
+            <div class="risk-badge" style="color:${rCol};border:1px solid ${rCol};font-size:0.58rem;padding:1px 5px;">${u.risk.toUpperCase()}</div>
+          </div>
+          <div class="upa-stats">
+            <div class="upa-stat">👥 <span>${(u.pop/1000).toFixed(0)}K</span></div>
+            <div class="upa-stat">🏚 <span>${u.shelters}</span> shelters</div>
+            <div class="upa-stat">🤝 <span>${u.volunteers}</span> vol</div>
+          </div>
+          <div style="margin-top:7px;display:flex;flex-direction:column;gap:3px;">
+            <div><div class="pop-bar-label"><span>Cyclone risk</span><span>${u.cyclone}%</span></div>
+              <div class="pop-bar-track"><div class="pop-bar-fill" style="width:${u.cyclone}%;background:var(--accent2);"></div></div></div>
+            <div><div class="pop-bar-label"><span>Flood risk</span><span>${u.flood}%</span></div>
+              <div class="pop-bar-track"><div class="pop-bar-fill" style="width:${u.flood}%;background:var(--indigo);"></div></div></div>
+            <div><div class="pop-bar-label"><span>Landslide risk</span><span>${u.landslide}%</span></div>
+              <div class="pop-bar-track"><div class="pop-bar-fill" style="width:${u.landslide}%;background:var(--warn);"></div></div></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+// ══════════════════════════════════════════
+// ALERT TIMELINE
+// ══════════════════════════════════════════
+const SAMPLE_HISTORY=[
+  {month:'Oct 2024',cyclone:3,flood:1,landslide:0,avgResponse:18},
+  {month:'Nov 2024',cyclone:2,flood:2,landslide:1,avgResponse:22},
+  {month:'Dec 2024',cyclone:1,flood:0,landslide:2,avgResponse:15},
+  {month:'Jan 2025',cyclone:0,flood:3,landslide:1,avgResponse:12},
+  {month:'Feb 2025',cyclone:1,flood:2,landslide:0,avgResponse:19},
+  {month:'Mar 2025',cyclone:2,flood:4,landslide:2,avgResponse:14},
+  {month:'Mar 2026',cyclone:alertHistory.filter(x=>x.hazard==='cyclone').length,
+                    flood:alertHistory.filter(x=>x.hazard==='flood').length,
+                    landslide:alertHistory.filter(x=>x.hazard==='landslide').length,
+                    avgResponse:12}
+];
+
+const SAMPLE_HISTORY_LOG=[
+  {id:'RA-240203',time:'2024-10-15 14:22',hazard:'cyclone',severity:'level_7',districts:["Cox's Bazar","Khulna"],response:18,status:'confirmed'},
+  {id:'RA-240891',time:'2024-11-02 08:15',hazard:'flood',  severity:'high',   districts:["Sunamganj"],          response:22,status:'confirmed'},
+  {id:'RA-241156',time:'2024-12-20 22:47',hazard:'landslide',severity:'emergency',districts:["Sylhet"],          response:15,status:'escalated'},
+  {id:'RA-250334',time:'2025-01-08 06:30',hazard:'flood',  severity:'high',   districts:["Sunamganj","Sylhet"],  response:12,status:'confirmed'},
+  {id:'RA-250712',time:'2025-03-14 11:05',hazard:'cyclone',severity:'level_4', districts:["Cox's Bazar"],        response:19,status:'confirmed'}
+];
+
+function initTimeline(){
+  renderTimelineChart();
+  renderHistoryLog();
+}
+
+function renderTimelineChart(){
+  const ctx=document.getElementById('timeline-chart').getContext('2d');
+  if(timelineChart)timelineChart.destroy();
+  const hist=[...SAMPLE_HISTORY];
+  hist[hist.length-1].cyclone=alertHistory.filter(x=>x.hazard==='cyclone').length||hist[hist.length-1].cyclone;
+  hist[hist.length-1].flood=alertHistory.filter(x=>x.hazard==='flood').length||hist[hist.length-1].flood;
+  timelineChart=new Chart(ctx,{type:'bar',
+    data:{labels:hist.map(x=>x.month),datasets:[
+      {label:'Cyclone Alerts',data:hist.map(x=>x.cyclone),backgroundColor:'rgba(255,60,60,0.7)',borderColor:'#ff3c3c',borderWidth:1},
+      {label:'Flood Alerts',  data:hist.map(x=>x.flood),  backgroundColor:'rgba(99,102,241,0.7)',borderColor:'#6366f1',borderWidth:1},
+      {label:'Landslide',     data:hist.map(x=>x.landslide),backgroundColor:'rgba(255,179,0,0.7)',borderColor:'#ffb300',borderWidth:1},
+      {label:'Avg Response (min)',data:hist.map(x=>x.avgResponse),type:'line',
+       borderColor:'#00ff9d',backgroundColor:'transparent',borderWidth:2,pointRadius:4,tension:0.4,yAxisID:'y1'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{
+        y:{ticks:{color:'#5a7a9e',font:{size:10}},grid:{color:'#0e2240'},stacked:true},
+        y1:{position:'right',ticks:{color:'#00ff9d',font:{size:10}},grid:{display:false}},
+        x:{ticks:{color:'#5a7a9e',font:{size:10}},grid:{color:'#0e2240'}}
+      },
+      plugins:{legend:{labels:{color:'#c8d8f0',font:{size:10},boxWidth:10}}}
     }
+  });
+}
 
-    // Flash markers
-    selected.forEach(d => {
-      const m = markers[d];
-      if (m) {
-        m.setStyle({ fillColor: '#ff0000', fillOpacity: 0.9 });
-        setTimeout(() => m.setStyle({ fillColor: riskColors['high'], fillOpacity: 0.5 }), 2000);
-      }
-    });
+function renderHistoryLog(){
+  const hl=document.getElementById('history-log');
+  const allHistory=[...SAMPLE_HISTORY_LOG,...alertHistory.map(x=>({
+    id:x.id,time:x.time.toLocaleString('en-BD',{timeZone:'Asia/Dhaka'}),
+    hazard:x.hazard,severity:x.severity,districts:x.districts,
+    response:x.responseTime||'—',status:x.responseTime?'confirmed':'pending'
+  }))];
+  hl.innerHTML='';
+  allHistory.reverse().forEach(a=>{
+    const col=a.status==='confirmed'?'var(--accent3)':a.status==='escalated'?'var(--accent2)':'var(--warn)';
+    const hCol=a.hazard==='cyclone'?'var(--accent2)':a.hazard==='flood'?'var(--indigo)':'var(--warn)';
+    const div=document.createElement('div');
+    div.style.cssText='background:var(--bg);border:1px solid var(--border);padding:8px 10px;margin-bottom:5px;';
+    div.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+      <span style="font-family:var(--font-mono);font-size:0.67rem;color:var(--text2);">${a.id}</span>
+      <span style="font-family:var(--font-cond);font-size:0.65rem;font-weight:700;color:${col};border:1px solid ${col};padding:1px 5px;">${a.status.toUpperCase()}</span>
+    </div>
+    <div style="font-family:var(--font-cond);font-size:0.78rem;font-weight:700;color:${hCol};">${a.hazard.toUpperCase()} — ${a.severity}</div>
+    <div style="font-size:0.62rem;color:var(--text2);font-family:var(--font-mono);margin-top:2px;">${Array.isArray(a.districts)?a.districts.join(', '):a.districts}</div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;font-family:var(--font-mono);font-size:0.6rem;color:var(--text2);">
+      <span>${a.time}</span><span>Response: <span style="color:var(--accent3);">${a.response} min</span></span>
+    </div>`;
+    hl.appendChild(div);
+  });
+}
 
-    fetch('/api/send-alert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hazard, severity, districts: selected })
-    })
-    .then(r => r.json())
-    .then(data => {
-      addLog(`🚨 Alert ${data.alert_id} dispatched → ${selected.join(', ')} [${hazard.toUpperCase()} / ${severity}]`, 'danger');
-      refreshStats();
-    });
-  }
-
-  // ── CONFIRM RECEIPT ──
-  function logConfirmation() {
-    const district    = document.getElementById('conf-district').value;
-    const upazila     = document.getElementById('conf-upazila').value;
-    const confirmedBy = document.getElementById('conf-name').value;
-
-    if (!upazila || !confirmedBy) {
-      alert('Please fill in upazila and volunteer name.');
-      return;
-    }
-
-    fetch('/api/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ district, upazila, confirmed_by: confirmedBy })
-    })
-    .then(r => r.json())
-    .then(data => {
-      addLog(`✅ Confirmed: ${upazila}, ${district} — by ${confirmedBy}`, 'confirm');
-      document.getElementById('conf-upazila').value = '';
-      document.getElementById('conf-name').value    = '';
-      refreshStats();
-    });
-  }
+// ══════════════════════════════════════════
+// STARTUP
+// ══════════════════════════════════════════
+setTimeout(()=>addLog('📡 BMD data feed: connected','info'),600);
+setTimeout(()=>addLog('👥 46 volunteer nodes online','info'),1200);
+setTimeout(()=>addLog('⚖ Legal framework: DMA 2012 + Sendai + UNDRR','ai'),1800);
+setTimeout(()=>addLog('🤖 Claude AI alert engine: ready','ai'),2400);
+setTimeout(()=>addLog('🌦 Weather feed: 4 districts loaded','info'),3000);
+setTimeout(()=>addLog('📱 SMS simulator: ready','info'),3600);
 </script>
 </body>
 </html>
